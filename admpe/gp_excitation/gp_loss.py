@@ -22,9 +22,8 @@ def compute_GP_posterior_variance(
         query_points = jnp.concatenate([observations[0:-1, :], actions], axis=-1)
     else:
         query_points = observations
-    latent_dist = gp_model.predict_posterior_variance(query_points)
-    variance = latent_dist.variance()
-    return jnp.sum(variance)
+    summed_variance = gp_model.predict_posterior_variance(query_points)
+    return summed_variance
 
 
 def GP_posterior_uncertainty_loss_function(
@@ -35,6 +34,7 @@ def GP_posterior_uncertainty_loss_function(
     gp_model: GPModel,
     tau: float,
     consider_action_distribution: bool,
+    target_distribution: jax.Array,
     penalty_function: Callable,
 ):
     if isinstance(model, eqx.Module):
