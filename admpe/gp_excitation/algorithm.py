@@ -85,7 +85,7 @@ def excite_and_fit_with_gp(
 
         # TODO add consider action distribution
         # this checks out how good the last obs, action combination actually was
-        mean_var = gp_model.predict_posterior_variance(jnp.concatenate([obs[None, :], action[None, :]], axis=-1))
+        mean_var = gp_model.predict_summed_posterior_variance(jnp.concatenate([obs[None, :], action[None, :]], axis=-1))
         mean_posterior_variances.append(mean_var)
 
         # callback

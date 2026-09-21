@@ -22,7 +22,7 @@ def compute_GP_posterior_variance(
         query_points = jnp.concatenate([observations[0:-1, :], actions], axis=-1)
     else:
         query_points = observations
-    summed_variance = gp_model.predict_posterior_variance(query_points)
+    summed_variance = gp_model.predict_summed_posterior_variance(query_points)
     return summed_variance
 
 
