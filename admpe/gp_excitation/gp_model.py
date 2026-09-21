@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 import equinox as eqx
 import gpjax as gpx
+import optax
 
 
 # TODO Build this with a vmapped structure instead of lists?
@@ -10,6 +11,8 @@ import gpjax as gpx
 
 class GPModel(eqx.Module):
     posteriors: list[gpx.gps.AbstractPosterior]
+    # train_x: jnp.array
+    # train_y: jnp.array
     train_data: list[gpx.Dataset]
 
     @staticmethod
@@ -45,6 +48,19 @@ class GPModel(eqx.Module):
         return total
 
 
+def update_gp_dataset(gp_model, observations, actions):
+    y_dim = observations.shape[-1]
+    new_posteriors, new_datasets = [], []
+
+    inputs = jnp.concatenate([observations[:-1], actions], axis=-1)
+    outputs = observations[1:]
+    for j in range(y_dim):
+        D = gpx.Dataset(X=inputs, y=outputs[..., j : j + 1])
+        new_datasets.append(D)
+    new_posteriors = gp_model.posteriors
+    return GPModel(posteriors=new_posteriors, train_data=new_datasets)
+
+
 def refit_gp_model(gp_model, observations, actions):
     """Updates the hyperparameters. Is this really necessary?"""
     y_dim = observations.shape[-1]
@@ -55,19 +71,16 @@ def refit_gp_model(gp_model, observations, actions):
 
     for j in range(y_dim):
         D = gpx.Dataset(X=inputs, y=outputs[..., j : j + 1])
-        # likelihood = gpx.likelihoods.Gaussian(num_datapoints=D.n)
-        # prior = _make_prior(X_window.shape[-1])
-        # posterior = prior * likelihood
-        # opt_posterior, _ = gpx.fit(
-        #     model=posterior,
-        #     objective=gpx.objectives.ConjugateMLL(negative=True),
-        #     train_data=D,
-        #     optim=optax.adam(learning_rate=0.01),
-        #     num_iters=num_iters,
-        #     key=jax.random.fold_in(key, j),
-        #     verbose=False,
-        # )
-        # new_posteriors.append(opt_posterior)
+        likelihood = gpx.likelihoods.Gaussian(num_datapoints=D.n)
+        prior = gp_model._make_prior(inputs.shape[-1])
+        posterior = prior * likelihood
+        opt_posterior, _ = gpx.fit_scipy(
+            model=posterior,
+            objective=lambda p, d: -gpx.objectives.conjugate_mll(p, d),
+            train_data=D,
+            verbose=False,
+        )
+        new_posteriors.append(opt_posterior)
         new_datasets.append(D)
     new_posteriors = gp_model.posteriors
     return GPModel(posteriors=new_posteriors, train_data=new_datasets)

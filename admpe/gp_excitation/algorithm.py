@@ -13,7 +13,7 @@ from dmpe.models.model_training import ModelTrainer
 from dmpe.algorithms.algorithm_utils import interact_and_observe
 
 from admpe.gp_excitation.gp_exciter import GPExciter, consult_gp_exciter
-from admpe.gp_excitation.gp_model import GPModel, refit_gp_model
+from admpe.gp_excitation.gp_model import GPModel, refit_gp_model, update_gp_dataset
 from admpe.gp_excitation.gp_loss import GP_posterior_uncertainty_loss_function
 
 
@@ -76,7 +76,12 @@ def excite_and_fit_with_gp(
         # I do not really need the model to predict something?
         ### ...
 
-        gp_model = refit_gp_model(gp_model, observations, actions)
+        # loader_key, gp_fit_key = jax.random.split(loader_key)
+
+        if k % 500 == 0 and k > 0:
+            gp_model = refit_gp_model(gp_model, observations, actions)
+        else:
+            gp_model = update_gp_dataset(gp_model, observations, actions)
 
         # TODO add consider action distribution
         # this checks out how good the last obs, action combination actually was
