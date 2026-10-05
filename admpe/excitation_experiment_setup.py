@@ -1,12 +1,15 @@
 """Construct excitation components."""
 
+import jax.numpy as jnp
+
 from dmpe.algorithms.algorithm_utils import default_dmpe_parameterization
 from dmpe.models.models import NeuralEulerODE, NeuralEulerODECartpole, NeuralEulerODEPendulum
-from dmpe.utils.density_estimation import build_grid
+from dmpe.utils.density_estimation import build_grid, DensityEstimate
 from dmpe.utils.env_utils.cart_pole_utils import setup_env as setup_cart_pole
 from dmpe.utils.env_utils.fluid_tank_utils import setup_env as setup_fluid_tank
 from dmpe.utils.env_utils.pendulum_utils import setup_env as setup_pendulum
 
+from admpe.gp_excitation.gp_model import GPModel, update_gp_dataset
 from admpe.adaptive_densities import TargetDensity
 from admpe.vector_fields import DynamicsVectorField
 
@@ -92,6 +95,59 @@ def setup_algorithm_parameterization(
     return params, proposed_actions, loader_key, expl_key, process_noise_key
 
 
+def setup_environment(system_name):
+    setup_env, model_class = _SYSTEM_SETUP[system_name]
+    env, penalty_function, featurize, env_params = setup_env()
+
+    return env, penalty_function, featurize, env_params, model_class
+
+
+def setup_model(system_name, model_type, model_params):
+    if model_type == "perfect":
+        return None
+
+    model_class = _SYSTEM_SETUP[system_name][-1]
+    return model_class(**model_params)
+
+
+def setup_estimator(excitation_objective, params):
+
+    dim_obs_space = params["model_params"]["obs_dim"]
+    dim_action_space = params["model_params"]["action_dim"]
+
+    if params["alg_params"]["consider_action_distribution"]:
+        dim = dim_obs_space + dim_action_space
+    else:
+        dim = dim_obs_space
+
+    if excitation_objective.startswith("gp_"):
+        # reconstruct the GP:
+        gp_model = GPModel.initialize_empty(x_dim=dim, y_dim=dim_obs_space)
+        n_train = params["n_time_steps"]
+
+        estimator = update_gp_dataset(
+            gp_model, k=n_train, observations=jnp.zeros(n_train + 1, dim_obs_space), actions=(n_train, dim_action_space)
+        )
+
+    else:
+        # reconstruct the density estimate
+        n_grid_points = params["alg_params"]["points_per_dim"] ** dim
+
+        estimator = DensityEstimate(
+            p=jnp.zeros([n_grid_points, 1]),
+            z_g=build_grid(
+                dim,
+                low=-params["alg_params"]["grid_extend"],
+                high=params["alg_params"]["grid_extend"],
+                points_per_dim=params["alg_params"]["points_per_dim"],
+            ),
+            bandwidth=jnp.array([params["alg_params"]["bandwidth"]]),
+            n_observations=jnp.array([0]),
+        )
+
+    return estimator
+
+
 def setup_experiment(
     system_name: str,
     excitation_objective: str,
@@ -108,8 +164,7 @@ def setup_experiment(
     """
     validate_experiment(system_name, excitation_objective, model_type, n_time_steps, points_per_dim)
 
-    setup_env, model_class = _SYSTEM_SETUP[system_name]
-    env, penalty_function, featurize, env_params = setup_env()
+    env, penalty_function, featurize, env_params, model_class = setup_environment(system_name)
 
     params, proposed_actions, loader_key, expl_key, process_noise_key = setup_algorithm_parameterization(
         seed,

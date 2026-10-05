@@ -3,12 +3,18 @@
 import dataclasses
 import json
 from pathlib import Path
+from copy import deepcopy
 
 import equinox as eqx
 import numpy as np
 
 import logging as log
 import sys
+
+import jax
+import jax.numpy as jnp
+
+from admpe.excitation_experiment_setup import setup_model, setup_estimator
 
 DESIRED_DT_FMT = "%Y-%m-%d %H:%M:%S"  # desired datetime format
 LOG_FORMATTER = log.Formatter("%(asctime)s | %(levelname)s : %(message)s", DESIRED_DT_FMT)
@@ -142,7 +148,39 @@ def list_excitation_results(
 
 
 def load_excitation_result(path: Path):
-    """Based on a given folder path, load the corresponding experiment results."""
+    """Based on a given folder path, load the corresponding experiment results
+    and reconstruct the necessary '.eqx'-objects.
+    """
+    foldername = Path(path)
+
+    metadata = json.loads((foldername / "experiment.json").read_text())
+    if metadata["status"] != "completed":
+        raise ValueError(f"Experiment is not completed: {path}")
+
+    # TODO: alternatively have the option to swith between f32 / f64?
+    jax.config.update("jax_enable_x64", metadata["use_f64"])
+    params = metadata["params"]
+
+    with np.load(path / "trajectory.npz", allow_pickle=False) as archive:
+        trajectory = {
+            name: jnp.asarray(archive[name]) for name in ("observations", "actions", "losses", "proposed_actions")
+        }
+
+    # reconstruct objects
+    loading_params = deepcopy(params["model_params"])
+    loading_params["key"] = jnp.array(loading_params["key"], dtype=jnp.uint32)
+    model_template = setup_model(metadata["system_name"], metadata["model_type"], loading_params)
+    model = eqx.tree_deserialise_leaves(foldername / "model.eqx", model_template)
+
+    estimator_template = setup_estimator(metadata["excitation_objective"], params)
+    estimator = eqx.tree_deserialise_leaves(foldername / "estimator.eqx", estimator_template)
+
+    return {
+        "metadata": metadata,
+        **trajectory,
+        "model": model,
+        "estimator": estimator,
+    }
 
 
 def save_modeling_result(path: Path, result):
