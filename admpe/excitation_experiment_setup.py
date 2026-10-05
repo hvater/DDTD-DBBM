@@ -1,0 +1,127 @@
+"""Construct excitation components."""
+
+from dmpe.algorithms.algorithm_utils import default_dmpe_parameterization
+from dmpe.models.models import NeuralEulerODE, NeuralEulerODECartpole, NeuralEulerODEPendulum
+from dmpe.utils.density_estimation import build_grid
+from dmpe.utils.env_utils.cart_pole_utils import setup_env as setup_cart_pole
+from dmpe.utils.env_utils.fluid_tank_utils import setup_env as setup_fluid_tank
+from dmpe.utils.env_utils.pendulum_utils import setup_env as setup_pendulum
+
+from admpe.adaptive_densities import TargetDensity
+from admpe.vector_fields import DynamicsVectorField
+
+SUPPORTED_SYSTEMS = ("fluid_tank", "pendulum", "cart_pole")
+SUPPORTED_OBJECTIVES = ("dmpe_uniform", "dmpe_static", "gp_grid", "gp_trajectory")
+SUPPORTED_MODELS = ("neural_euler", "perfect")
+
+_SYSTEM_SETUP = {
+    "fluid_tank": (setup_fluid_tank, NeuralEulerODE),
+    "pendulum": (setup_pendulum, NeuralEulerODEPendulum),
+    "cart_pole": (setup_cart_pole, NeuralEulerODECartpole),
+}
+
+
+def validate_experiment(system_name, excitation_objective, model_type, n_time_steps, points_per_dim):
+    for name, value, choices in (
+        ("system_name", system_name, SUPPORTED_SYSTEMS),
+        ("excitation_objective", excitation_objective, SUPPORTED_OBJECTIVES),
+        ("model_type", model_type, SUPPORTED_MODELS),
+    ):
+        if value not in choices:
+            raise ValueError(f"Unknown {name} {value!r}. Choose from {choices}.")
+    if n_time_steps < 2:
+        raise ValueError("n_time_steps must be at least 2 (initial observation plus one transition).")
+    if points_per_dim < 2:
+        raise ValueError("points_per_dim must be at least 2.")
+
+
+def setup_algorithm_parameterization(
+    seed,
+    excitation_objective,
+    model_type,
+    env,
+    env_params,
+    penalty_function,
+    points_per_dim,
+    n_time_steps,
+    featurize,
+    model_class,
+):
+    # TODO: Replace with proper parameterization per algorithm and system
+    params, proposed_actions, loader_key, expl_key, process_noise_key = default_dmpe_parameterization(
+        env,
+        seed=seed,
+        n_time_steps=n_time_steps,
+        featurize=featurize,
+        model_class=model_class,
+        points_per_dim=points_per_dim,
+    )
+
+    params["env_params"] = env_params
+    alg_params = params["alg_params"]
+    alg_params["penalty_function"] = penalty_function
+
+    if model_type == "perfect":
+        params["model_params"] = None
+        params["model_trainer_params"] = None
+
+    if excitation_objective == "dmpe_static":
+        vf = DynamicsVectorField.from_env(
+            env,
+            points_per_dim,
+            low=-alg_params["grid_extend"],
+            high=alg_params["grid_extend"],
+        )
+        target = TargetDensity.from_vector_field(
+            vf=vf,
+            bandwidth=alg_params["bandwidth"],
+            penalty_function=penalty_function,
+            consider_action_distribution=True,
+            obs_dim=env.obs_dim,
+            act_dim=env.action_dim,
+        )
+        alg_params["target_distribution"] = target.p[0]
+
+    elif excitation_objective.startswith("gp_"):
+        alg_params["loss_type"] = excitation_objective.removeprefix("gp_")
+        alg_params["target_support_points"] = (
+            build_grid(env.obs_dim + env.action_dim, -1.0, 1.0, points_per_dim)
+            if excitation_objective == "gp_grid"
+            else None
+        )
+    return params, proposed_actions, loader_key, expl_key, process_noise_key
+
+
+def setup_experiment(
+    system_name: str,
+    excitation_objective: str,
+    model_type: str,
+    seed: int,
+    n_time_steps: int = 5_000,
+    points_per_dim: int = 10,
+):
+    """Return environment, resolved parameters, initial actions, and three RNG keys.
+
+    ``neural_euler`` selects the system-specific neural model and learns online;
+    ``perfect`` uses the environment itself for predictions. The static target
+    uses the true dynamics, even when predictions use a learned model.
+    """
+    validate_experiment(system_name, excitation_objective, model_type, n_time_steps, points_per_dim)
+
+    setup_env, model_class = _SYSTEM_SETUP[system_name]
+    env, penalty_function, featurize, env_params = setup_env()
+
+    params, proposed_actions, loader_key, expl_key, process_noise_key = setup_algorithm_parameterization(
+        seed,
+        excitation_objective,
+        model_type,
+        env,
+        env_params,
+        penalty_function,
+        points_per_dim,
+        n_time_steps,
+        featurize,
+        model_class,
+    )
+
+    return env, params, proposed_actions, loader_key, expl_key, process_noise_key
