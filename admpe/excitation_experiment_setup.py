@@ -1,10 +1,12 @@
 """Construct excitation components."""
 
+import jax
 import jax.numpy as jnp
 
 from dmpe.algorithms.algorithm_utils import default_dmpe_parameterization
 from dmpe.models.models import NeuralEulerODE, NeuralEulerODECartpole, NeuralEulerODEPendulum
 from dmpe.utils.density_estimation import build_grid, DensityEstimate
+from dmpe.utils.signals import aprbs
 from dmpe.utils.env_utils.cart_pole_utils import setup_env as setup_cart_pole
 from dmpe.utils.env_utils.fluid_tank_utils import setup_env as setup_fluid_tank
 from dmpe.utils.env_utils.pendulum_utils import setup_env as setup_pendulum
@@ -12,6 +14,7 @@ from dmpe.utils.env_utils.pendulum_utils import setup_env as setup_pendulum
 from admpe.gp_excitation.gp_model import GPModel, update_gp_dataset
 from admpe.adaptive_densities import TargetDensity
 from admpe.vector_fields import DynamicsVectorField
+from admpe.parameterization import fetch_parameterization
 
 SUPPORTED_SYSTEMS = ("fluid_tank", "pendulum", "cart_pole")
 SUPPORTED_OBJECTIVES = ("dmpe_uniform", "dmpe_static", "gp_grid", "gp_trajectory")
@@ -40,6 +43,7 @@ def validate_experiment(system_name, excitation_objective, model_type, n_time_st
 
 def setup_algorithm_parameterization(
     seed,
+    system_name,
     excitation_objective,
     model_type,
     env,
@@ -50,14 +54,33 @@ def setup_algorithm_parameterization(
     featurize,
     model_class,
 ):
-    # TODO: Replace with proper parameterization per algorithm and system
-    params, proposed_actions, loader_key, expl_key, process_noise_key = default_dmpe_parameterization(
-        env,
+
+    alg_params, model_trainer_params, model_params = fetch_parameterization(
+        system_name, model_type, excitation_objective
+    )
+
+    params = dict(
         seed=seed,
         n_time_steps=n_time_steps,
-        featurize=featurize,
-        model_class=model_class,
-        points_per_dim=points_per_dim,
+        model_class=NeuralEulerODE if model_class is None else model_class,
+        env_params=None,
+        alg_params=alg_params,
+        model_trainer_params=model_trainer_params,
+        model_params=model_params,
+    )
+
+    key = jax.random.PRNGKey(seed=params["seed"])
+    data_key, model_key, loader_key, expl_key, process_noise_key, key = jax.random.split(key, 6)
+
+    data_keys = jax.random.split(data_key, env.action_dim)
+    params["model_params"]["key"] = model_key
+
+    # initial guess
+    proposed_actions = jnp.hstack(
+        [
+            aprbs(alg_params["n_prediction_steps"], batch_size=1, t_min=1, t_max=10, key=data_key)[0]
+            for data_key in range(data_keys)
+        ]
     )
 
     params["env_params"] = env_params
@@ -168,6 +191,7 @@ def setup_experiment(
 
     params, proposed_actions, loader_key, expl_key, process_noise_key = setup_algorithm_parameterization(
         seed,
+        system_name,
         excitation_objective,
         model_type,
         env,
