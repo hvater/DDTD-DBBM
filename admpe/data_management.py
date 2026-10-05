@@ -85,7 +85,8 @@ def list_excitation_results(
     model_type: str | list[str] | None = None,
     exp_name: str | None = None,
     enforce_identical_exp_name: bool = True,
-):
+) -> list[str]:
+
     root = EXCITATION_EXPERIMENTS_ROOT if path is None else path
 
     def normalize(value: str | list[str] | None) -> set[str] | None:
@@ -100,25 +101,33 @@ def list_excitation_results(
     ]
 
     results = []
+    # iterate over all folders at the targeted path
     for folder in root.iterdir():
         if not folder.is_dir():
             continue
 
+        # separate the seed from the remaining name
         name_without_seed, separator, seed_suffix = folder.name.rpartition("-seed")
         if not separator:
             continue
 
+        # separate the uuid_suffic from the identifier and check that is follows the usual pattern
         prefix, separator, uuid_suffix = name_without_seed.rpartition("-")
         if not separator or len(uuid_suffix) != 8 or any(c not in "0123456789abcdef" for c in uuid_suffix):
             continue
 
+        # check that the remaining prefix consists of three parts that are separated by '-'
         parts = prefix.split("-", maxsplit=3)
         if len(parts) < 3:
             continue
 
+        # check that the filters are
         if any(allowed is not None and actual not in allowed for actual, allowed in zip(parts[:3], filters)):
             continue
 
+        # check for 'exp_name' if one is given
+        # depending on the flag 'enforce_identical_exp_name' the specified exp_name must be fully identical to the
+        # excitation result or it may be a subset of the exp_name of the excitation result
         actual_exp_name = parts[3] if len(parts) == 4 else ""
         if exp_name is not None:
             if enforce_identical_exp_name:
@@ -133,7 +142,7 @@ def list_excitation_results(
 
 
 def load_excitation_result(path: Path):
-    raise NotImplementedError()
+    """Based on a given folder path, load the corresponding experiment results."""
 
 
 def save_modeling_result(path: Path, result):
