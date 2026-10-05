@@ -64,10 +64,10 @@ class GPModel(eqx.Module):
         return total
 
 
-def update_gp_dataset(gp_model: GPModel, observations: jax.Array, actions: jax.Array):
+def update_gp_dataset(gp_model: GPModel, k: int, observations: jax.Array, actions: jax.Array):
 
-    inputs = jnp.concatenate([observations[:-1], actions], axis=-1)
-    outputs = observations[1:]
+    inputs = jnp.concatenate([observations[:k], actions[:k]], axis=-1)
+    outputs = observations[1 : k + 1]
 
     new_posteriors = gp_model.posteriors
     return GPModel(posteriors=new_posteriors, train_x=inputs, train_y=outputs)

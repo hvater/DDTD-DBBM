@@ -41,7 +41,7 @@ def traj_GP_posterior_uncertainty_loss_function(
     target_support_points: jax.Array,
     penalty_function: Callable,
 ):
-    if isinstance(model, eqx.Module):
+    if not isinstance(model, excenvs.CoreEnvironment):
         observations = simulate_ahead(model=model, init_obs=init_obs, actions=actions, tau=tau)
     else:
         observations, _ = simulate_ahead_with_env(env=model, init_obs=init_obs, init_state=init_state, actions=actions)
@@ -75,12 +75,16 @@ def grid_GP_posterior_uncertainty_loss_function(
     penalty_function: Callable,
 ):
 
-    if isinstance(model, eqx.Module):
+    if not isinstance(model, excenvs.CoreEnvironment):
         observations = simulate_ahead(model=model, init_obs=init_obs, actions=actions, tau=tau)
     else:
         observations, _ = simulate_ahead_with_env(env=model, init_obs=init_obs, init_state=init_state, actions=actions)
 
-    updated_gp_model = update_gp_dataset(gp_model=gp_model, observations=observations, actions=actions)
+    updated_gp_model = GPModel(
+        posteriors=gp_model.posteriors,
+        train_x=jnp.concatenate([gp_model.train_x, jnp.concatenate([observations[:-1], actions], axis=-1)], axis=0),
+        train_y=jnp.concatenate([gp_model.train_y, observations[1:]], axis=0),
+    )
 
     query_points = target_support_points
 

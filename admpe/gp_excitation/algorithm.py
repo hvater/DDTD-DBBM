@@ -84,7 +84,7 @@ def excite_and_fit_with_gp(
         if k % 500 == 0 and k > 0:
             gp_model = refit_gp_model(gp_model, k, observations, actions)
         else:
-            gp_model = update_gp_dataset(gp_model, observations, actions)
+            gp_model = update_gp_dataset(gp_model, k, observations, actions)
 
         # TODO add consider action distribution
         # this checks out how good the last obs, action combination actually was
