@@ -14,7 +14,10 @@ from dmpe.algorithms.algorithm_utils import interact_and_observe
 
 from admpe.gp_excitation.gp_exciter import GPExciter, consult_gp_exciter
 from admpe.gp_excitation.gp_model import GPModel, refit_gp_model, update_gp_dataset
-from admpe.gp_excitation.gp_loss import GP_posterior_uncertainty_loss_function
+from admpe.gp_excitation.gp_loss import (
+    traj_GP_posterior_uncertainty_loss_function,
+    grid_GP_posterior_uncertainty_loss_function,
+)
 
 
 def excite_and_fit_with_gp(
@@ -79,7 +82,7 @@ def excite_and_fit_with_gp(
         # loader_key, gp_fit_key = jax.random.split(loader_key)
 
         if k % 500 == 0 and k > 0:
-            gp_model = refit_gp_model(gp_model, observations, actions)
+            gp_model = refit_gp_model(gp_model, k, observations, actions)
         else:
             gp_model = update_gp_dataset(gp_model, observations, actions)
 
@@ -144,10 +147,20 @@ def excite_with_gp_uncertainty(
     observations = observations.at[0].set(obs)
     actions = jnp.zeros((exp_params["n_time_steps"] - 1, dim_action_space))
 
+    loss_type = exp_params["alg_params"]["loss_type"]
+    if loss_type == "trajectory":
+        loss_function = traj_GP_posterior_uncertainty_loss_function
+    elif loss_type == "grid":
+        loss_function = grid_GP_posterior_uncertainty_loss_function
+    else:
+        raise ValueError(f"Specified 'loss_type' {loss_type} is unknown.")
+    grad_loss_function = jax.value_and_grad(loss_function, argnums=(3))
+
     exciter = GPExciter(
         start_optimizing=exp_params["alg_params"]["start_optimizing"],
-        loss_function=GP_posterior_uncertainty_loss_function,
-        grad_loss_function=jax.value_and_grad(GP_posterior_uncertainty_loss_function, argnums=(3)),
+        loss_function=loss_function,
+        grad_loss_function=grad_loss_function,
+        target_support_points=exp_params["alg_params"]["target_support_points"],
         excitation_optimizer=exp_params["alg_params"]["excitation_optimizer"],
         tau=env.tau,
         n_opt_steps=exp_params["alg_params"]["n_opt_steps"],

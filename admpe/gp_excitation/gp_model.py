@@ -24,12 +24,12 @@ class GPModel(eqx.Module):
 
     @staticmethod
     def _make_prior(x_dim: int) -> gpx.gps.Prior:
-        kernel = gpx.kernels.RBF(active_dims=list(range(x_dim)))
+        kernel = gpx.kernels.RBF(active_dims=list(range(x_dim)), lengthscale=0.1, variance=1.0)
         return gpx.gps.Prior(mean_function=gpx.mean_functions.Zero(), kernel=kernel)
 
     @staticmethod
     def _make_posterior(n_datapoints, prior):
-        likelihood = gpx.likelihoods.Gaussian(num_datapoints=max(n_datapoints, 1))
+        likelihood = gpx.likelihoods.Gaussian(num_datapoints=max(n_datapoints, 1), obs_stddev=0.01)
         return prior * likelihood
 
     @classmethod
@@ -64,7 +64,7 @@ class GPModel(eqx.Module):
         return total
 
 
-def update_gp_dataset(gp_model, observations, actions):
+def update_gp_dataset(gp_model: GPModel, observations: jax.Array, actions: jax.Array):
 
     inputs = jnp.concatenate([observations[:-1], actions], axis=-1)
     outputs = observations[1:]
@@ -73,26 +73,48 @@ def update_gp_dataset(gp_model, observations, actions):
     return GPModel(posteriors=new_posteriors, train_x=inputs, train_y=outputs)
 
 
-def refit_gp_model(gp_model, observations, actions):
+def refit_gp_model(gp_model: GPModel, k: int, observations: jax.Array, actions: jax.Array):
     """Updates the hyperparameters. Is this really necessary?"""
-    y_dim = observations.shape[-1]
     new_posteriors = []
 
-    inputs = jnp.concatenate([observations[:-1], actions], axis=-1)
-    outputs = observations[1:]
+    inputs = jnp.concatenate([observations[:k], actions[:k]], axis=-1)
+    outputs = observations[1 : k + 1]
 
-    # for j in range(y_dim):
-    #     D = gpx.Dataset(X=inputs, y=outputs[..., j : j + 1])
-    #     likelihood = gpx.likelihoods.Gaussian(num_datapoints=D.n)
-    #     prior = gp_model._make_prior(inputs.shape[-1])
-    #     posterior = prior * likelihood
-    #     opt_posterior, _ = gpx.fit_scipy(
-    #         model=posterior,
-    #         objective=lambda p, d: -gpx.objectives.conjugate_mll(p, d),
-    #         train_data=D,
-    #         verbose=False,
-    #     )
-    #     new_posteriors.append(opt_posterior)
+    for j, prev_posterior in enumerate(gp_model.posteriors):
+        D = gpx.Dataset(X=inputs, y=outputs[..., j : j + 1])
+        likelihood = gpx.likelihoods.Gaussian(
+            num_datapoints=D.n,
+            obs_stddev=prev_posterior.likelihood.obs_stddev,
+        )
+        posterior = prev_posterior.prior * likelihood
+
+        gpx.summarise(posterior)
+
+        # print(inputs)
+
+        # X = inputs
+        # y = outputs[:, j : j + 1]
+        # K = prior.kernel.gram(X).as_matrix()
+
+        # print("dtype:", X.dtype, y.dtype)
+        # print("finite X:", bool(jnp.all(jnp.isfinite(X))))
+        # print("finite y:", bool(jnp.all(jnp.isfinite(y))))
+        # print("finite kernel:", bool(jnp.all(jnp.isfinite(K))))
+        # print("max |X|:", jnp.max(jnp.abs(X)))
+        # print("max |y|:", jnp.max(jnp.abs(y)))
+        # print("noise stddev:", posterior.likelihood.obs_stddev)
+
+        # print(inputs.dtype, outputs.dtype)
+        # print(-gpx.objectives.conjugate_mll(posterior, D))
+
+        # opt_posterior, _ = gpx.fit_scipy(
+        #     model=posterior,
+        #     objective=lambda p, d: -gpx.objectives.conjugate_mll(p, d),
+        #     train_data=D,
+        #     verbose=True,
+        # )
+        # new_posteriors.append(opt_posterior)
 
     new_posteriors = gp_model.posteriors
+
     return GPModel(posteriors=new_posteriors, train_x=inputs, train_y=outputs)

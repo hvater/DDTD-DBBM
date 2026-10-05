@@ -49,6 +49,7 @@ class GPExciter(eqx.Module):
     start_optimizing: int
     loss_function: Callable
     grad_loss_function: Callable
+    target_support_points: jax.Array
     excitation_optimizer: optax.GradientTransformation
     tau: float
     n_opt_steps: int
@@ -101,6 +102,7 @@ class GPExciter(eqx.Module):
             tau=self.tau,
             consider_action_distribution=self.consider_action_distribution,
             target_distribution=None,
+            target_support_points=self.target_support_points,
             penalty_function=self.penalty_function,
         )
 
