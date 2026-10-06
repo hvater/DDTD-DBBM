@@ -103,7 +103,6 @@ def run_experiment_for_seed(
             model_overrides=model_overrides,
         )
         metadata["params"] = params
-
         write_metadata(working_path / "experiment.json", metadata)
 
         if excitation_objective.startswith("gp_"):
