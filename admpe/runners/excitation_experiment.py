@@ -39,9 +39,9 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--gpu_id", type=int, default=-1, help="GPU index; -1 selects CPU.")
     parser.add_argument("--use_f64", action="store_true")
     parser.add_argument(
-        "--n_time_steps", type=int, default=5_000, help="Number of observations, including the initial one."
+        "--n_time_steps", type=int, default=7_000, help="Number of observations, including the initial one."
     )
-    parser.add_argument("--points_per_dim", type=int, default=10)
+    # parser.add_argument("--points_per_dim", type=int, default=10)
     parser.add_argument("--output_root", type=Path, default=EXCITATION_EXPERIMENTS_ROOT)
     parser.add_argument("--continue_on_error", action="store_true")
     return parser.parse_args(argv)
@@ -53,8 +53,8 @@ def run_experiment_for_seed(
     system_name: str,
     excitation_objective: str,
     model_type: str,
-    n_time_steps: int = 5_000,
-    points_per_dim: int = 10,
+    n_time_steps: int = 7_000,
+    # points_per_dim: int = 10,
     output_root: Path = EXCITATION_EXPERIMENTS_ROOT,
     callback=None,
     callback_every: int | None = None,
@@ -76,7 +76,6 @@ def run_experiment_for_seed(
         excitation_objective=excitation_objective,
         model_type=model_type,
         n_time_steps=n_time_steps,
-        points_per_dim=points_per_dim,
         use_f64=bool(jax.config.jax_enable_x64),
         device=str(jax.config.jax_default_device),
         status="running",
@@ -91,7 +90,6 @@ def run_experiment_for_seed(
             model_type,
             seed,
             n_time_steps,
-            points_per_dim,
         )
         metadata["params"] = params
 
@@ -136,8 +134,7 @@ def run_excitation_experiment(
     exp_name: str | None = None,
     use_f64: bool = False,
     gpu_id: int = -1,
-    n_time_steps: int = 5_000,
-    points_per_dim: int = 10,
+    n_time_steps: int = 7000,
     output_root: Path = EXCITATION_EXPERIMENTS_ROOT,
     continue_on_error: bool = False,
     callback=None,
@@ -149,7 +146,7 @@ def run_excitation_experiment(
     is enabled; failed trials still record their errors in experiment.json.
     Callbacks follow the selected algorithm's callback API.
     """
-    validate_experiment(system_name, excitation_objective, model_type, n_time_steps, points_per_dim)
+    validate_experiment(system_name, excitation_objective, model_type, n_time_steps)
 
     # validate further inputs
     if gpu_id < -1:
@@ -191,7 +188,6 @@ def run_excitation_experiment(
                         excitation_objective=excitation_objective,
                         model_type=model_type,
                         n_time_steps=n_time_steps,
-                        points_per_dim=points_per_dim,
                         output_root=output_root,
                         callback=callback,
                         callback_every=callback_every,

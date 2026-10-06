@@ -3,7 +3,6 @@
 import jax
 import jax.numpy as jnp
 
-from dmpe.algorithms.algorithm_utils import default_dmpe_parameterization
 from dmpe.models.models import NeuralEulerODE, NeuralEulerODECartpole, NeuralEulerODEPendulum
 from dmpe.utils.density_estimation import build_grid, DensityEstimate
 from dmpe.utils.signals import aprbs
@@ -27,7 +26,7 @@ _SYSTEM_SETUP = {
 }
 
 
-def validate_experiment(system_name, excitation_objective, model_type, n_time_steps, points_per_dim):
+def validate_experiment(system_name, excitation_objective, model_type, n_time_steps):
     for name, value, choices in (
         ("system_name", system_name, SUPPORTED_SYSTEMS),
         ("excitation_objective", excitation_objective, SUPPORTED_OBJECTIVES),
@@ -37,8 +36,6 @@ def validate_experiment(system_name, excitation_objective, model_type, n_time_st
             raise ValueError(f"Unknown {name} {value!r}. Choose from {choices}.")
     if n_time_steps < 2:
         raise ValueError("n_time_steps must be at least 2 (initial observation plus one transition).")
-    if points_per_dim < 2:
-        raise ValueError("points_per_dim must be at least 2.")
 
 
 def setup_algorithm_parameterization(
@@ -79,7 +76,7 @@ def setup_algorithm_parameterization(
     proposed_actions = jnp.hstack(
         [
             aprbs(alg_params["n_prediction_steps"], batch_size=1, t_min=1, t_max=10, key=data_key)[0]
-            for data_key in range(data_keys)
+            for data_key in data_keys
         ]
     )
 
@@ -185,7 +182,7 @@ def setup_experiment(
     ``perfect`` uses the environment itself for predictions. The static target
     uses the true dynamics, even when predictions use a learned model.
     """
-    validate_experiment(system_name, excitation_objective, model_type, n_time_steps, points_per_dim)
+    validate_experiment(system_name, excitation_objective, model_type, n_time_steps)
 
     env, penalty_function, featurize, env_params, model_class = setup_environment(system_name)
 
