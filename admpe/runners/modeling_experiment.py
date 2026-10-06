@@ -10,13 +10,20 @@ os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
 import jax
 
-from admpe.data_management import MODELING_EXPERIMENTS_ROOT, write_metadata, save_modeling_result
+from admpe.data_management import (
+    MODELING_EXPERIMENTS_ROOT,
+    write_metadata,
+    save_modeling_result,
+    load_excitation_result,
+)
+from admpe.excitation_experiment_setup import setup_environment
+
 from admpe.modeling_experiment_setup import (
     SUPPORTED_MODELS,
     SUPPORTED_SYSTEMS,
-    fetch_parameterization,
-    load_dataset,
+    setup_parameterization,
     setup_experiment,
+    fit,
 )
 
 
@@ -32,10 +39,6 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--output_root", type=Path, default=MODELING_EXPERIMENTS_ROOT)
     parser.add_argument("--continue_on_error", action="store_true")
     return parser.parse_args(argv)
-
-
-def fit():
-    raise NotImplementedError()
 
 
 def run_experiment_for_seed(
@@ -119,7 +122,6 @@ def run_modeling_experiment(
     callback=None,
     callback_every: int | None = None,
     *,
-    alg_overrides=None,
     model_trainer_overrides=None,
     model_overrides=None,
 ):
@@ -156,13 +158,18 @@ def run_modeling_experiment(
 
         for dataset_path in dataset_paths:
             try:
-                train_data = load_dataset(dataset_path)
-                params = fetch_parameterization(
-                    train_data.metadata["system_name"],
+                _, _, featurize, _, model_class = setup_environment(system_name)
+                params = setup_parameterization(
+                    train_data,
                     model_type,
+                    featurize,
+                    model_class,
                     model_overrides=model_overrides,
                     model_trainer_overrides=model_trainer_overrides,
                 )
+                # TODO: consider moving this to setup_experiment?
+                train_data = load_excitation_result(dataset_path)
+
             except:
                 log.exception("Could not prepare dataset %s", dataset_path)
                 if not continue_on_error:
