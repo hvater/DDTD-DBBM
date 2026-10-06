@@ -1,0 +1,2 @@
+def fit():
+    raise NotImplementedError()

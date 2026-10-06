@@ -10,7 +10,7 @@ def setup_parameterization(
     train_data, model_type, featurize, proposed_model_class, *, model_overrides, model_trainer_overrides
 ):
     model_params, model_trainer_params, model_class = fetch_parameterization(
-        train_data.metadata["system_name"],
+        train_data["metadata"]["system_name"],
         model_type,
         featurize,
         proposed_model_class,
@@ -31,7 +31,3 @@ def setup_experiment(train_data, seed, params):
     raise NotImplementedError()
     model, optimizer, opt_state, key, featurize, params = None
     return model, optimizer, opt_state, key, featurize, params
-
-
-def fit():
-    raise NotImplementedError()

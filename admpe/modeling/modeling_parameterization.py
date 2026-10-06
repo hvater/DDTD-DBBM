@@ -16,7 +16,7 @@ def fetch_parameterization(
             model_trainer_params = dict(
                 start_learning=None,
                 training_batch_size=128,
-                n_train_steps=1e5,
+                n_train_steps=int(1e5),
                 sequence_length=10,
                 featurize=featurize,
                 model_lr=1e-4,
@@ -27,7 +27,7 @@ def fetch_parameterization(
             model_trainer_params = dict(
                 start_learning=None,
                 training_batch_size=128,
-                n_train_steps=1e5,
+                n_train_steps=int(1e5),
                 sequence_length=20,
                 featurize=featurize,
                 model_lr=1e-4,
@@ -45,7 +45,7 @@ def fetch_parameterization(
             model_trainer_params = dict(
                 start_learning=None,
                 training_batch_size=128,
-                n_train_steps=1e5,
+                n_train_steps=int(1e5),
                 sequence_length=50,
                 featurize=featurize,
                 model_lr=1e-4,
