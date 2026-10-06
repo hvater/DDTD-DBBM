@@ -12,10 +12,10 @@ from dmpe.utils.env_utils.cart_pole_utils import setup_env as setup_cart_pole
 from dmpe.utils.env_utils.fluid_tank_utils import setup_env as setup_fluid_tank
 from dmpe.utils.env_utils.pendulum_utils import setup_env as setup_pendulum
 
-from admpe.gp_excitation.gp_model import GPModel, update_gp_dataset
+from admpe.excitation.gp_excitation.gp_model import GPModel, update_gp_dataset
 from admpe.adaptive_densities import TargetDensity
 from admpe.vector_fields import DynamicsVectorField
-from admpe.excitation_parameterization import fetch_parameterization
+from admpe.excitation.excitation_parameterization import fetch_parameterization
 
 SUPPORTED_SYSTEMS = ("fluid_tank", "pendulum", "cart_pole")
 SUPPORTED_OBJECTIVES = ("dmpe_uniform", "dmpe_static_dynamics", "gp_grid", "gp_trajectory")

@@ -1,5 +1,5 @@
-from admpe.excitation_experiment_setup import SUPPORTED_SYSTEMS, apply_overrides
-from admpe.modeling_parameterization import fetch_parameterization
+from admpe.excitation.excitation_experiment_setup import SUPPORTED_SYSTEMS, apply_overrides
+from admpe.modeling.modeling_parameterization import fetch_parameterization
 
 
 # TODO: differentiate between different types, i.e., simulation or 1step prediction etc.

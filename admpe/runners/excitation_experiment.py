@@ -14,13 +14,13 @@ import jax
 
 from dmpe.algorithms.algorithms import excite_with_dmpe
 
-from admpe.gp_excitation.algorithm import excite_with_gp_uncertainty
+from admpe.excitation.gp_excitation.algorithm import excite_with_gp_uncertainty
 from admpe.data_management import (
     EXCITATION_EXPERIMENTS_ROOT,
     save_excitation_result,
     write_metadata,
 )
-from admpe.excitation_experiment_setup import (
+from admpe.excitation.excitation_experiment_setup import (
     SUPPORTED_MODELS,
     SUPPORTED_OBJECTIVES,
     SUPPORTED_SYSTEMS,

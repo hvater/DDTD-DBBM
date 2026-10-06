@@ -16,9 +16,9 @@ from admpe.data_management import (
     save_modeling_result,
     load_excitation_result,
 )
-from admpe.excitation_experiment_setup import setup_environment
+from admpe.excitation.excitation_experiment_setup import setup_environment
 
-from admpe.modeling_experiment_setup import (
+from admpe.modeling.modeling_experiment_setup import (
     SUPPORTED_MODELS,
     SUPPORTED_SYSTEMS,
     setup_parameterization,
