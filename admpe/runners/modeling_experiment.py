@@ -23,8 +23,8 @@ from admpe.modeling.modeling_experiment_setup import (
     SUPPORTED_SYSTEMS,
     setup_parameterization,
     setup_experiment,
-    fit,
 )
+from admpe.modeling.model_fitting import fit
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -77,11 +77,18 @@ def run_experiment_for_seed(
 
     started = perf_counter()
     try:
-        model, optimizer, opt_state, key, featurize, params = setup_experiment(train_data, seed, params)
+        model, model_trainer, opt_state, loader_key, params = setup_experiment(model_type, seed, params)
         metadata["params"] = params
         write_metadata(working_path / "experiment.json", metadata)
 
-        result = fit()
+        result = fit(
+            train_data,
+            model,
+            model_trainer,
+            opt_state,
+            loader_key,
+            params,
+        )
         save_modeling_result(working_path, result)
         metadata["status"] = "completed"
         metadata["elapsed_seconds"] = perf_counter() - started

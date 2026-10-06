@@ -14,7 +14,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 
-from admpe.excitation_experiment_setup import setup_model, setup_estimator
+from admpe.excitation.excitation_experiment_setup import setup_model, setup_estimator
 
 DESIRED_DT_FMT = "%Y-%m-%d %H:%M:%S"  # desired datetime format
 LOG_FORMATTER = log.Formatter("%(asctime)s | %(levelname)s : %(message)s", DESIRED_DT_FMT)

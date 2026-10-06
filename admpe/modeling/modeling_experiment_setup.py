@@ -1,3 +1,9 @@
+import jax
+import optax
+import equinox as eqx
+
+from dmpe.models.model_training import ModelTrainer
+
 from admpe.excitation.excitation_experiment_setup import SUPPORTED_SYSTEMS, apply_overrides
 from admpe.modeling.modeling_parameterization import fetch_parameterization
 
@@ -27,7 +33,14 @@ def setup_parameterization(
     return params
 
 
-def setup_experiment(train_data, seed, params):
-    raise NotImplementedError()
-    model, optimizer, opt_state, key, featurize, params = None
-    return model, optimizer, opt_state, key, featurize, params
+def setup_experiment(model_type, seed, params):
+
+    if model_type == "neural_euler":
+        model_key, loader_key = jax.random.split(jax.random.PRNGKey(seed))
+        params["model_params"]["key"] = model_key
+        model = params["model_class"](**params["model_params"])
+        model_trainer = ModelTrainer(**params["model_trainer_params"])
+        opt_state = model_trainer.model_optimizer.init(eqx.filter(model, eqx.is_inexact_array))
+        return model, model_trainer, opt_state, loader_key, params
+    else:
+        raise NotImplementedError()

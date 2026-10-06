@@ -1,4 +1,5 @@
-from admpe.modeling.modeling_experiment_setup import SUPPORTED_SYSTEMS, SUPPORTED_MODELS
+import optax
+
 from admpe.modeling.gp_modeling import GPSequenceModel, GPTransitionModel
 
 
@@ -8,10 +9,6 @@ def fetch_parameterization(
     featurize,
     proposed_model_class,
 ):
-    if system_name not in SUPPORTED_SYSTEMS:
-        raise ValueError(f"Unsupported system: {system_name!r}")
-    if model_type not in SUPPORTED_MODELS:
-        raise ValueError(f"Unsupported model: {model_type!r}")
 
     if model_type == "neural_euler":
         model_params = dict(
@@ -27,7 +24,8 @@ def fetch_parameterization(
             n_train_steps=int(1e5),
             sequence_length={"fluid_tank": 10, "pendulum": 20, "cart_pole": 50}[system_name],
             featurize=featurize,
-            model_lr=1e-4,
+            model_optimizer=optax.adabelief(learning_rate=1e-4),
+            tau=None,
         )
         model_class = proposed_model_class
     elif model_type.startswith("gp_"):
