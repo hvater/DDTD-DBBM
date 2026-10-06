@@ -24,11 +24,15 @@ def setup_parameterization(
     model_trainer_params = apply_overrides(model_trainer_params, model_trainer_overrides)
     model_params = apply_overrides(model_params, model_overrides)
 
+    n_iters = model_trainer_params["n_iters"]
+    del model_trainer_params["n_iters"]
+
     # TODO: Is more parameterization required?
     params = dict(
         model_trainer_params=model_trainer_params,
         model_params=model_params,
         model_class=model_class,
+        n_iters=n_iters,
     )
     return params
 

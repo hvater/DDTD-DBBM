@@ -83,6 +83,7 @@ def run_experiment_for_seed(
 
         result = fit(
             train_data,
+            model_type,
             model,
             model_trainer,
             opt_state,
@@ -93,6 +94,7 @@ def run_experiment_for_seed(
         metadata["status"] = "completed"
         metadata["elapsed_seconds"] = perf_counter() - started
         write_metadata(working_path / "experiment.json", metadata)
+
     except Exception as error:
         metadata.update(
             status="failed",
@@ -102,6 +104,7 @@ def run_experiment_for_seed(
         write_metadata(working_path / "experiment.json", metadata)
         raise
 
+    # move modeling artifacts from '_incomplete' to final output folder
     try:
         working_path.rename(final_path)
     except OSError:
