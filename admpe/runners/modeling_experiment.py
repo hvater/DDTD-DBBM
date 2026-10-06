@@ -212,7 +212,11 @@ def run_modeling_experiment(
                 finally:
                     jax.clear_caches()
 
-    log.info("Completed %s of %s trials", len(paths), len(seeds_to_run))
+    log.info(
+        "Completed %s of %s trials",
+        len(paths),
+        len(dataset_paths) * len(seeds_to_run),
+    )
     return paths
 
 

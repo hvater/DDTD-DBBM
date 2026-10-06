@@ -66,6 +66,51 @@ def write_metadata(path: Path, metadata: dict):
     path.write_text(json.dumps(_json_value(metadata), indent=2) + "\n")
 
 
+def get_nested(metadata, key):
+    value = metadata
+    for part in key.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
+def provide_results_overview(results: dict, overview_fields: dict):
+    """Based on a filtered list of results, provide an overview over the most relevant metadata."""
+
+    rows = []
+    for result in results:
+        folder = Path(result["path"])
+        read_error = None
+
+        try:
+            metadata = json.loads((folder / "experiment.json").read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            metadata = {}
+            read_error = str(error)
+
+        rows.append(
+            {
+                "name": folder.name,
+                "path": folder,
+                "status": metadata.get("status", "unknown"),
+                **{column: get_nested(metadata, key) for column, key in overview_fields.items()},
+                "error": metadata.get("error") or read_error,
+            }
+        )
+
+        columns = [
+            "name",
+            "path",
+            "status",
+            *overview_fields,
+            "error",
+        ]
+
+    df = pd.DataFrame.from_records(rows, columns=columns).convert_dtypes()
+    return df.sort_values("name").reset_index(drop=True)
+
+
 def save_excitation_result(path: Path, result: tuple):
     """Save trajectories and array leaves; metadata records the setup separately.
 
@@ -165,70 +210,27 @@ def list_excitation_results(
     return sorted(results, key=lambda result: result["name"])
 
 
-EXCITATION_OVERVIEW_FIELDS = {
-    "system": "system_name",
-    "objective": "excitation_objective",
-    "model": "model_type",
-    "seed": "seed",
-    "n_time_steps": "n_time_steps",
-    "elapsed_seconds": "elapsed_seconds",
-    "use_f64": "use_f64",
-    "device": "device",
-    "prediction_horizon": "params.alg_params.n_prediction_steps",
-    "n_opt_steps": "params.alg_params.n_opt_steps",
-    "n_starts": "params.alg_params.n_starts",
-    "bandwidth": "params.alg_params.bandwidth",
-    "points_per_dim": "params.alg_params.points_per_dim",
-    "model_width": "params.model_params.width_size",
-    "model_depth": "params.model_params.depth",
-    "training_batch_size": ("params.model_trainer_params.training_batch_size"),
-    "model_lr": "params.model_trainer_params.model_lr",
-}
-
-
-def get_nested(metadata, key):
-    value = metadata
-    for part in key.split("."):
-        if not isinstance(value, dict):
-            return None
-        value = value.get(part)
-    return value
-
-
 def provide_excitation_results_overview(results: dict):
-    """Based on a filtered list of excitation results, provide an overview over the most relevant metadata."""
-
-    rows = []
-    for result in results:
-        folder = Path(result["path"])
-        read_error = None
-
-        try:
-            metadata = json.loads((folder / "experiment.json").read_text())
-        except (OSError, json.JSONDecodeError) as error:
-            metadata = {}
-            read_error = str(error)
-
-        rows.append(
-            {
-                "name": folder.name,
-                "path": folder,
-                "status": metadata.get("status", "unknown"),
-                **{column: get_nested(metadata, key) for column, key in EXCITATION_OVERVIEW_FIELDS.items()},
-                "error": metadata.get("error") or read_error,
-            }
-        )
-
-        columns = [
-            "name",
-            "path",
-            "status",
-            *EXCITATION_OVERVIEW_FIELDS,
-            "error",
-        ]
-
-    df = pd.DataFrame.from_records(rows, columns=columns).convert_dtypes()
-    return df.sort_values("name").reset_index(drop=True)
+    EXCITATION_OVERVIEW_FIELDS = {
+        "system": "system_name",
+        "objective": "excitation_objective",
+        "model": "model_type",
+        "seed": "seed",
+        "n_time_steps": "n_time_steps",
+        "elapsed_seconds": "elapsed_seconds",
+        "use_f64": "use_f64",
+        "device": "device",
+        "prediction_horizon": "params.alg_params.n_prediction_steps",
+        "n_opt_steps": "params.alg_params.n_opt_steps",
+        "n_starts": "params.alg_params.n_starts",
+        "bandwidth": "params.alg_params.bandwidth",
+        "points_per_dim": "params.alg_params.points_per_dim",
+        "model_width": "params.model_params.width_size",
+        "model_depth": "params.model_params.depth",
+        "training_batch_size": ("params.model_trainer_params.training_batch_size"),
+        "model_lr": "params.model_trainer_params.model_lr",
+    }
+    return provide_results_overview(results, EXCITATION_OVERVIEW_FIELDS)
 
 
 def load_excitation_result(path: Path):
@@ -272,12 +274,113 @@ def save_modeling_result(path: Path, result):
 
 
 def load_modeling_result(path: Path):
-    raise NotImplementedError()
+    foldername = Path(path)
+
+    metadata = json.loads((foldername / "experiment.json").read_text())
+    if metadata["status"] != "completed":
+        raise ValueError(f"Experiment is not completed: {path}")
+
+    params = metadata["params"]
+    loading_params = deepcopy(params["model_params"])
+    loading_params["key"] = jnp.array(loading_params["key"], dtype=jnp.uint32)
+    model_template = setup_model(metadata["system_name"], metadata["model_type"], loading_params)
+    model = eqx.tree_deserialise_leaves(foldername / "model.eqx", model_template)
+
+    return {
+        "metadata": metadata,
+        "model": model,
+    }
 
 
-def list_modeling_results(path: Path | None):
-    raise NotImplementedError()
+def list_modeling_results(
+    path: Path | None = None,
+    system_name: str | list[str] | None = None,
+    model_type: str | list[str] | None = None,
+    exp_name: str | None = None,
+    enforce_identical_exp_name: bool = True,
+    status: str | list[str] | None = "completed",
+) -> list[dict]:
+
+    root = MODELING_EXPERIMENTS_ROOT if path is None else Path(path)
+
+    def normalize(value: str | list[str] | None) -> set[str] | None:
+        if value is None:
+            return None
+        return {value} if isinstance(value, str) else set(value)
+
+    filters = [
+        normalize(system_name),
+        normalize(model_type),
+    ]
+    allowed_statuses = normalize(status)
+
+    results = []
+    for folder in root.iterdir():
+        if not folder.is_dir():
+            continue
+
+        name_without_seed, separator, seed_suffix = folder.name.rpartition("-seed")
+        if not separator or not seed_suffix.isdigit():
+            continue
+
+        prefix, separator, uuid_suffix = name_without_seed.rpartition("-")
+        if not separator or len(uuid_suffix) != 8 or any(c not in "0123456789abcdef" for c in uuid_suffix):
+            continue
+
+        if not prefix.startswith("modeling-"):
+            continue
+
+        # Preserve hyphens within the optional experiment name.
+        parts = prefix.removeprefix("modeling-").split("-", maxsplit=2)
+        if len(parts) < 2:
+            continue
+
+        if any(allowed is not None and actual not in allowed for actual, allowed in zip(parts[:2], filters)):
+            continue
+
+        actual_exp_name = parts[2] if len(parts) == 3 else ""
+        if exp_name is not None:
+            if enforce_identical_exp_name:
+                if actual_exp_name != exp_name:
+                    continue
+            elif exp_name not in actual_exp_name:
+                continue
+
+        try:
+            metadata = json.loads((folder / "experiment.json").read_text())
+            actual_status = metadata.get("status", "unknown")
+        except (OSError, json.JSONDecodeError):
+            actual_status = "unknown"
+
+        if allowed_statuses is not None and actual_status not in allowed_statuses:
+            continue
+
+        results.append(
+            {
+                "name": folder.name,
+                "path": folder,
+                "status": actual_status,
+            }
+        )
+
+    return sorted(results, key=lambda result: result["name"])
 
 
 def provide_modeling_results_overview(results: dict):
-    raise NotImplementedError()
+    MODELING_OVERVIEW_FIELDS = {
+        "system": "system_name",
+        "model": "model_type",
+        "seed": "seed",
+        "dataset_path": "dataset_path",
+        "elapsed_seconds": "elapsed_seconds",
+        "use_f64": "use_f64",
+        "device": "device",
+        "tau": "params.model_trainer_params.tau",
+        "model_width": "params.model_params.width_size",
+        "model_depth": "params.model_params.depth",
+        "training_batch_size": "params.model_trainer_params.training_batch_size",
+        "n_train_steps": "params.model_trainer_params.n_train_steps",
+        "sequence_length": "params.model_trainer_params.sequence_length",
+        "model_lr": "params.model_trainer_params.model_optimizer.lr",
+    }
+    return provide_results_overview(results, MODELING_OVERVIEW_FIELDS)
