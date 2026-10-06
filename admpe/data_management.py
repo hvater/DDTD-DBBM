@@ -165,7 +165,7 @@ def list_excitation_results(
     return sorted(results, key=lambda result: result["name"])
 
 
-OVERVIEW_FIELDS = {
+EXCITATION_OVERVIEW_FIELDS = {
     "system": "system_name",
     "objective": "excitation_objective",
     "model": "model_type",
@@ -214,7 +214,7 @@ def provide_excitation_results_overview(results: dict):
                 "name": folder.name,
                 "path": folder,
                 "status": metadata.get("status", "unknown"),
-                **{column: get_nested(metadata, key) for column, key in OVERVIEW_FIELDS.items()},
+                **{column: get_nested(metadata, key) for column, key in EXCITATION_OVERVIEW_FIELDS.items()},
                 "error": metadata.get("error") or read_error,
             }
         )
@@ -223,7 +223,7 @@ def provide_excitation_results_overview(results: dict):
             "name",
             "path",
             "status",
-            *OVERVIEW_FIELDS,
+            *EXCITATION_OVERVIEW_FIELDS,
             "error",
         ]
 
@@ -268,12 +268,16 @@ def load_excitation_result(path: Path):
 
 
 def save_modeling_result(path: Path, result):
-    raise NotImplementedError()
+    eqx.tree_serialise_leaves(path / "model.eqx", result)
 
 
-def save_modeling_result(path: Path, result):
+def load_modeling_result(path: Path):
     raise NotImplementedError()
 
 
 def list_modeling_results(path: Path | None):
+    raise NotImplementedError()
+
+
+def provide_modeling_results_overview(results: dict):
     raise NotImplementedError()
