@@ -1,62 +1,48 @@
+from admpe.modeling.modeling_experiment_setup import SUPPORTED_SYSTEMS, SUPPORTED_MODELS
+from admpe.modeling.gp_modeling import GPSequenceModel, GPTransitionModel
+
+
 def fetch_parameterization(
     system_name,
     model_type,
     featurize,
     proposed_model_class,
 ):
-    if system_name == "fluid_tank":
-        if model_type == "neural_euler":
-            model_params = dict(
-                obs_dim=1,
-                action_dim=1,
-                width_size=128,
-                depth=3,
-                key=None,
-            )
-            model_trainer_params = dict(
-                start_learning=None,
-                training_batch_size=128,
-                n_train_steps=int(1e5),
-                sequence_length=10,
-                featurize=featurize,
-                model_lr=1e-4,
-            )
-            model_class = proposed_model_class
-    elif system_name == "pendulum":
-        if model_type == "neural_euler":
-            model_trainer_params = dict(
-                start_learning=None,
-                training_batch_size=128,
-                n_train_steps=int(1e5),
-                sequence_length=20,
-                featurize=featurize,
-                model_lr=1e-4,
-            )
-            model_params = dict(
-                obs_dim=2,
-                action_dim=1,
-                width_size=128,
-                depth=3,
-                key=None,
-            )
-            model_class = proposed_model_class
-    elif system_name == "cart_pole":
-        if model_type == "neural_euler":
-            model_trainer_params = dict(
-                start_learning=None,
-                training_batch_size=128,
-                n_train_steps=int(1e5),
-                sequence_length=50,
-                featurize=featurize,
-                model_lr=1e-4,
-            )
-            model_params = dict(
-                obs_dim=4,
-                action_dim=1,
-                width_size=128,
-                depth=3,
-                key=None,
-            )
-            model_class = proposed_model_class
+    if system_name not in SUPPORTED_SYSTEMS:
+        raise ValueError(f"Unsupported system: {system_name!r}")
+    if model_type not in SUPPORTED_MODELS:
+        raise ValueError(f"Unsupported model: {model_type!r}")
+
+    if model_type == "neural_euler":
+        model_params = dict(
+            obs_dim={"fluid_tank": 1, "pendulum": 2, "cart_pole": 4}[system_name],
+            action_dim=1,
+            width_size=128,
+            depth=3,
+            key=None,
+        )
+        model_trainer_params = dict(
+            start_learning=None,
+            training_batch_size=128,
+            n_train_steps=int(1e5),
+            sequence_length={"fluid_tank": 10, "pendulum": 20, "cart_pole": 50}[system_name],
+            featurize=featurize,
+            model_lr=1e-4,
+        )
+        model_class = proposed_model_class
+    elif model_type.startswith("gp_"):
+        model_params = dict(
+            lengthscale=0.5,
+            variance=1.0,
+            obs_stddev=0.1,
+        )
+        model_trainer_params = dict(
+            max_iters=100,
+            max_train_points=500,
+        )
+        if model_type == "gp_transition":
+            model_class = GPTransitionModel
+        elif model_type == "gp_sequence":
+            model_class = GPSequenceModel
 
     return model_params, model_trainer_params, model_class

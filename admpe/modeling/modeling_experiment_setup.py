@@ -3,7 +3,7 @@ from admpe.modeling.modeling_parameterization import fetch_parameterization
 
 
 # TODO: differentiate between different types, i.e., simulation or 1step prediction etc.
-SUPPORTED_MODELS = ["neural_euler"]
+SUPPORTED_MODELS = ["neural_euler", "gp_transition", "gp_sequence"]
 
 
 def setup_parameterization(
