@@ -50,7 +50,7 @@ class GPModel(eqx.Module):
         posterior_variances = []
         for idx, posterior in enumerate(self.posteriors):
             D = gpx.Dataset(X=self.train_x, y=self.train_y[..., idx : idx + 1])
-            latent_dist = posterior.predict(x_query, train_data=D)
+            latent_dist = posterior.predict(x_query, train_data=D, return_covariance_type="diagonal")
             posterior_variances.append(latent_dist.variance)
         return jnp.stack(posterior_variances, axis=-1)
 
@@ -59,7 +59,7 @@ class GPModel(eqx.Module):
         total = 0.0
         for idx, posterior in enumerate(self.posteriors):
             D = gpx.Dataset(X=self.train_x, y=self.train_y[..., idx : idx + 1])
-            latent_dist = posterior.predict(x_query, train_data=D)
+            latent_dist = posterior.predict(x_query, train_data=D, return_covariance_type="diagonal")
             total = total + jnp.sum(latent_dist.variance)
         return total
 
