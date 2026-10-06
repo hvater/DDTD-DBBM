@@ -1,5 +1,7 @@
 """Construct excitation components."""
 
+from copy import deepcopy
+
 import jax
 import jax.numpy as jnp
 
@@ -38,6 +40,21 @@ def validate_experiment(system_name, excitation_objective, model_type, n_time_st
         raise ValueError("n_time_steps must be at least 2 (initial observation plus one transition).")
 
 
+def apply_overrides(defaults, overrides):
+    resolved = deepcopy(defaults)
+
+    if overrides is None or resolved is None:
+        # nothing to be overwritten
+        return resolved
+
+    unknown = overrides.keys() - resolved.keys()
+    if unknown:
+        raise ValueError(f"Unknown parameters: {sorted(unknown)}")
+
+    resolved.update(deepcopy(overrides))
+    return resolved
+
+
 def setup_algorithm_parameterization(
     seed,
     system_name,
@@ -49,11 +66,19 @@ def setup_algorithm_parameterization(
     n_time_steps,
     featurize,
     model_class,
+    *,
+    alg_overrides=None,
+    model_trainer_overrides=None,
+    model_overrides=None,
 ):
 
     alg_params, model_trainer_params, model_params = fetch_parameterization(
         system_name, model_type, excitation_objective
     )
+
+    alg_params = apply_overrides(alg_params, alg_overrides)
+    model_trainer_params = apply_overrides(model_trainer_params, model_trainer_overrides)
+    model_params = apply_overrides(model_params, model_overrides)
 
     params = dict(
         seed=seed,
@@ -173,6 +198,10 @@ def setup_experiment(
     model_type: str,
     seed: int,
     n_time_steps: int,
+    *,
+    alg_overrides=None,
+    model_trainer_overrides=None,
+    model_overrides=None,
 ):
     """Return environment, resolved parameters, initial actions, and three RNG keys.
 
@@ -195,6 +224,9 @@ def setup_experiment(
         n_time_steps,
         featurize,
         model_class,
+        alg_overrides=alg_overrides,
+        model_trainer_overrides=model_trainer_overrides,
+        model_overrides=model_overrides,
     )
 
     return env, params, proposed_actions, loader_key, expl_key, process_noise_key

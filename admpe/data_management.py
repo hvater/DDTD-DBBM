@@ -1,16 +1,16 @@
 """Locations and serialization for excitation experiment artifacts."""
 
+import logging as log
+import sys
 import dataclasses
 import json
 from pathlib import Path
 from copy import deepcopy
 
-import equinox as eqx
 import numpy as np
+import pandas as pd
 
-import logging as log
-import sys
-
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 
@@ -163,6 +163,72 @@ def list_excitation_results(
         )
 
     return sorted(results, key=lambda result: result["name"])
+
+
+OVERVIEW_FIELDS = {
+    "system": "system_name",
+    "objective": "excitation_objective",
+    "model": "model_type",
+    "seed": "seed",
+    "n_time_steps": "n_time_steps",
+    "elapsed_seconds": "elapsed_seconds",
+    "use_f64": "use_f64",
+    "device": "device",
+    "prediction_horizon": "params.alg_params.n_prediction_steps",
+    "n_opt_steps": "params.alg_params.n_opt_steps",
+    "n_starts": "params.alg_params.n_starts",
+    "bandwidth": "params.alg_params.bandwidth",
+    "points_per_dim": "params.alg_params.points_per_dim",
+    "model_width": "params.model_params.width_size",
+    "model_depth": "params.model_params.depth",
+    "training_batch_size": ("params.model_trainer_params.training_batch_size"),
+    "model_lr": "params.model_trainer_params.model_lr",
+}
+
+
+def get_nested(metadata, key):
+    value = metadata
+    for part in key.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
+def provide_excitation_results_overview(results: dict):
+    """Based on a filtered list of excitation results, provide an overview over the most relevant metadata."""
+
+    rows = []
+    for result in results:
+        folder = Path(result["path"])
+        read_error = None
+
+        try:
+            metadata = json.loads((folder / "experiment.json").read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            metadata = {}
+            read_error = str(error)
+
+        rows.append(
+            {
+                "name": folder.name,
+                "path": folder,
+                "status": metadata.get("status", "unknown"),
+                **{column: get_nested(metadata, key) for column, key in OVERVIEW_FIELDS.items()},
+                "error": metadata.get("error") or read_error,
+            }
+        )
+
+        columns = [
+            "name",
+            "path",
+            "status",
+            *OVERVIEW_FIELDS,
+            "error",
+        ]
+
+    df = pd.DataFrame.from_records(rows, columns=columns).convert_dtypes()
+    return df.sort_values("name").reset_index(drop=True)
 
 
 def load_excitation_result(path: Path):

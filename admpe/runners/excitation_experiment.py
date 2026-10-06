@@ -58,6 +58,10 @@ def run_experiment_for_seed(
     output_root: Path = EXCITATION_EXPERIMENTS_ROOT,
     callback=None,
     callback_every: int | None = None,
+    *,
+    alg_overrides=None,
+    model_trainer_overrides=None,
+    model_overrides=None,
 ) -> Path:
     """Build, execute, and persist one trial; return its artifact directory.
 
@@ -94,6 +98,9 @@ def run_experiment_for_seed(
             model_type,
             seed,
             n_time_steps,
+            alg_overrides=alg_overrides,
+            model_trainer_overrides=model_trainer_overrides,
+            model_overrides=model_overrides,
         )
         metadata["params"] = params
 
@@ -154,6 +161,10 @@ def run_excitation_experiment(
     continue_on_error: bool = False,
     callback=None,
     callback_every: int | None = None,
+    *,
+    alg_overrides=None,
+    model_trainer_overrides=None,
+    model_overrides=None,
 ) -> list[Path]:
     """Run seeds sequentially and return directories of successful trials.
 
@@ -206,6 +217,9 @@ def run_excitation_experiment(
                         output_root=output_root,
                         callback=callback,
                         callback_every=callback_every,
+                        alg_overrides=alg_overrides,
+                        model_trainer_overrides=model_trainer_overrides,
+                        model_overrides=model_overrides,
                     )
                 )
             except Exception:
