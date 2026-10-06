@@ -64,11 +64,15 @@ def run_experiment_for_seed(
     Device and precision are configured by ``run_excitation_experiment``.
     A failed trial keeps metadata with its error and resolved parameters.
     """
+    root = Path(output_root)
+    incomplete_root = root / "_incomplete"
+    incomplete_root.mkdir(parents=True, exist_ok=True)
 
     # generate and store metadata
     exp_id = f"{base_id}-seed{seed}"
-    path = Path(output_root) / exp_id
-    path.mkdir(parents=True, exist_ok=False)
+    working_path = incomplete_root / exp_id
+    final_path = root / exp_id
+    working_path.mkdir(exist_ok=False)
     metadata = dict(
         exp_id=exp_id,
         seed=seed,
@@ -80,7 +84,7 @@ def run_experiment_for_seed(
         device=str(jax.config.jax_default_device),
         status="running",
     )
-    write_metadata(path / "experiment.json", metadata)
+    write_metadata(working_path / "experiment.json", metadata)
 
     started = perf_counter()
     try:
@@ -93,7 +97,7 @@ def run_experiment_for_seed(
         )
         metadata["params"] = params
 
-        write_metadata(path / "experiment.json", metadata)
+        write_metadata(working_path / "experiment.json", metadata)
 
         if excitation_objective.startswith("gp_"):
             excite = excite_with_gp_uncertainty
@@ -111,19 +115,30 @@ def run_experiment_for_seed(
             callback=callback,
             callback_every=callback_every,
         )
-        save_excitation_result(path, result)
+        save_excitation_result(working_path, result)
         metadata["status"] = "completed"
+        metadata["elapsed_seconds"] = perf_counter() - started
+        write_metadata(working_path / "experiment.json", metadata)
 
     except Exception as error:
-        metadata.update(status="failed", error=f"{type(error).__name__}: {error}")
+        metadata["status"] = "failed"
+        metadata["error"] = f"{type(error).__name__}: {error}"
+        metadata["elapsed_seconds"] = perf_counter() - started
+        write_metadata(working_path / "experiment.json", metadata)
         raise
 
-    finally:
-        metadata["elapsed_seconds"] = perf_counter() - started
-        write_metadata(path / "experiment.json", metadata)
-
-    log.info("Saved experiment to %s", path)
-    return path
+    try:
+        working_path.rename(final_path)
+    except OSError:
+        log.exception(
+            "Experiment %s completed, but could not be moved to %s. " "Results remain at %s.",
+            exp_id,
+            final_path,
+            working_path,
+        )
+        raise
+    log.info("Saved experiment to %s", final_path)
+    return final_path
 
 
 def run_excitation_experiment(

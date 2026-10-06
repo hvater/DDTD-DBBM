@@ -91,6 +91,7 @@ def list_excitation_results(
     model_type: str | list[str] | None = None,
     exp_name: str | None = None,
     enforce_identical_exp_name: bool = True,
+    status: str | list[str] | None = "completed",
 ) -> list[str]:
 
     root = EXCITATION_EXPERIMENTS_ROOT if path is None else path
@@ -105,6 +106,8 @@ def list_excitation_results(
         normalize(excitation_objective),
         normalize(model_type),
     ]
+
+    allowed_statuses = normalize(status)
 
     results = []
     # iterate over all folders at the targeted path
@@ -142,9 +145,24 @@ def list_excitation_results(
             elif exp_name not in actual_exp_name:
                 continue
 
-        results.append(folder)
+        try:
+            metadata = json.loads((folder / "experiment.json").read_text())
+            actual_status = metadata.get("status", "unknown")
+        except (OSError, json.JSONDecodeError):
+            actual_status = "unknown"
 
-    return sorted(results)
+        if allowed_statuses is not None and actual_status not in allowed_statuses:
+            continue
+
+        results.append(
+            {
+                "name": folder.name,
+                "path": folder,
+                "status": actual_status,
+            }
+        )
+
+    return sorted(results, key=lambda result: result["name"])
 
 
 def load_excitation_result(path: Path):
