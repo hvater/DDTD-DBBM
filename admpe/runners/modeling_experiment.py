@@ -158,6 +158,7 @@ def run_modeling_experiment(
 
         for dataset_path in dataset_paths:
             try:
+                train_data = load_excitation_result(dataset_path)
                 _, _, featurize, _, model_class = setup_environment(system_name)
                 params = setup_parameterization(
                     train_data,
@@ -167,8 +168,6 @@ def run_modeling_experiment(
                     model_overrides=model_overrides,
                     model_trainer_overrides=model_trainer_overrides,
                 )
-                # TODO: consider moving this to setup_experiment?
-                train_data = load_excitation_result(dataset_path)
 
             except:
                 log.exception("Could not prepare dataset %s", dataset_path)
