@@ -12,7 +12,7 @@ from dmpe.models.model_utils import simulate_ahead, simulate_ahead_with_env
 from dmpe.models.model_training import ModelTrainer
 from dmpe.excitation.excitation_utils import optimize_actions_multistart
 
-from admpe.gp_excitation.gp_model import GPModel
+from admpe.excitation.gp_excitation.gp_model import GPModel
 
 
 def consult_gp_exciter(

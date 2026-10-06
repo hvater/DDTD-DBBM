@@ -8,7 +8,7 @@ import equinox as eqx
 import exciting_environments as excenvs
 from dmpe.models.model_utils import simulate_ahead, simulate_ahead_with_env
 
-from admpe.gp_excitation.gp_model import GPModel, update_gp_dataset
+from admpe.excitation.gp_excitation.gp_model import GPModel, update_gp_dataset
 
 
 def compute_GP_posterior_variance(

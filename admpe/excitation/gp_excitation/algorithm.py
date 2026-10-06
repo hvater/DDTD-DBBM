@@ -12,9 +12,9 @@ import exciting_environments as excenvs
 from dmpe.models.model_training import ModelTrainer
 from dmpe.algorithms.algorithm_utils import interact_and_observe
 
-from admpe.gp_excitation.gp_exciter import GPExciter, consult_gp_exciter
-from admpe.gp_excitation.gp_model import GPModel, refit_gp_model, update_gp_dataset
-from admpe.gp_excitation.gp_loss import (
+from admpe.excitation.gp_excitation.gp_exciter import GPExciter, consult_gp_exciter
+from admpe.excitation.gp_excitation.gp_model import GPModel, refit_gp_model, update_gp_dataset
+from admpe.excitation.gp_excitation.gp_loss import (
     traj_GP_posterior_uncertainty_loss_function,
     grid_GP_posterior_uncertainty_loss_function,
 )
