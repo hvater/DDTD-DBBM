@@ -16,7 +16,7 @@ from admpe.vector_fields import DynamicsVectorField
 from admpe.excitation_parameterization import fetch_parameterization
 
 SUPPORTED_SYSTEMS = ("fluid_tank", "pendulum", "cart_pole")
-SUPPORTED_OBJECTIVES = ("dmpe_uniform", "dmpe_static", "gp_grid", "gp_trajectory")
+SUPPORTED_OBJECTIVES = ("dmpe_uniform", "dmpe_static_dynamics", "gp_grid", "gp_trajectory")
 SUPPORTED_MODELS = ("neural_euler", "perfect")
 
 _SYSTEM_SETUP = {
@@ -46,7 +46,6 @@ def setup_algorithm_parameterization(
     env,
     env_params,
     penalty_function,
-    points_per_dim,
     n_time_steps,
     featurize,
     model_class,
@@ -88,10 +87,10 @@ def setup_algorithm_parameterization(
         params["model_params"] = None
         params["model_trainer_params"] = None
 
-    if excitation_objective == "dmpe_static":
+    if excitation_objective == "dmpe_static_dynamics":
         vf = DynamicsVectorField.from_env(
             env,
-            points_per_dim,
+            alg_params["points_per_dim"],
             low=-alg_params["grid_extend"],
             high=alg_params["grid_extend"],
         )
@@ -99,7 +98,7 @@ def setup_algorithm_parameterization(
             vf=vf,
             bandwidth=alg_params["bandwidth"],
             penalty_function=penalty_function,
-            consider_action_distribution=True,
+            consider_action_distribution=alg_params["consider_action_distribution"],
             obs_dim=env.obs_dim,
             act_dim=env.action_dim,
         )
@@ -108,7 +107,7 @@ def setup_algorithm_parameterization(
     elif excitation_objective.startswith("gp_"):
         alg_params["loss_type"] = excitation_objective.removeprefix("gp_")
         alg_params["target_support_points"] = (
-            build_grid(env.obs_dim + env.action_dim, -1.0, 1.0, points_per_dim)
+            build_grid(env.obs_dim + env.action_dim, -1.0, 1.0, alg_params["points_per_dim"])
             if excitation_objective == "gp_grid"
             else None
         )
@@ -173,8 +172,7 @@ def setup_experiment(
     excitation_objective: str,
     model_type: str,
     seed: int,
-    n_time_steps: int = 5_000,
-    points_per_dim: int = 10,
+    n_time_steps: int,
 ):
     """Return environment, resolved parameters, initial actions, and three RNG keys.
 
@@ -194,7 +192,6 @@ def setup_experiment(
         env,
         env_params,
         penalty_function,
-        points_per_dim,
         n_time_steps,
         featurize,
         model_class,
