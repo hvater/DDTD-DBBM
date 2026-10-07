@@ -1,3 +1,5 @@
+import pathlib
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -7,11 +9,26 @@ import equinox as eqx
 
 from dmpe.utils.density_estimation import build_grid
 
+from admpe.data_management import load_excitation_result
+
 from admpe.evaluation.modeling_metrics import (
     prediction_metrics,
     rollout_metrics,
 )
 from admpe.evaluation.model_wrapping import EnvWrapper, ModelWrapper
+
+
+def load_corresponding_excitation_result(modeling_result):
+    """TODO: Move to a modeling result dataclass? Also visualizations could go in there"""
+
+    try:
+        excitation_result = load_excitation_result(modeling_result["metadata"]["dataset_path"])
+    except FileNotFoundError:
+
+        path = pathlib.Path(modeling_result["metadata"]["dataset_path"].removeprefix("PosixPath('").removesuffix("')"))
+        excitation_result = load_excitation_result(path)
+
+    return excitation_result
 
 
 def evaluate_model():
