@@ -33,7 +33,7 @@ def prediction_metrics(reference, prediction):
         "mae": jnp.mean(jnp.abs(error)),
         "mae_per_feature": jnp.mean(jnp.abs(error), axis=reduction_axes),
         "wce": jnp.max(jnp.abs(error)),
-        "wce": jnp.max(jnp.abs(error), axis=reduction_axes),
+        "wce_per_feature": jnp.max(jnp.abs(error), axis=reduction_axes),
         "nonfinite_prediction_fraction": jnp.mean(~jnp.all(jnp.isfinite(prediction), axis=-1)),
     }
 
