@@ -41,6 +41,12 @@ EXCITATION_EXPERIMENTS_ROOT.mkdir(parents=True, exist_ok=True)
 MODELING_EXPERIMENTS_ROOT = Path(__file__).resolve().parent.parent / "data" / "modeling_experiments"
 MODELING_EXPERIMENTS_ROOT.mkdir(parents=True, exist_ok=True)
 
+QUANTITATIVE_RESULTS_ROOT = Path(__file__).resolve().parent.parent / "data" / "quantitative_results"
+QUANTITATIVE_RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
+
+TESTING_TRAJECTORIES_ROOT = Path(__file__).resolve().parent.parent / "data" / "testing_trajectories"
+TESTING_TRAJECTORIES_ROOT.mkdir(parents=True, exist_ok=True)
+
 
 def _json_value(value):
     """Record arrays and configuration objects without pickling executable code."""
