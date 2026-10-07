@@ -21,12 +21,12 @@ def fetch_parameterization(
         model_trainer_params = dict(
             start_learning=None,
             training_batch_size=128,
-            n_train_steps=10,
+            n_train_steps=25,
             sequence_length={"fluid_tank": 10, "pendulum": 20, "cart_pole": 50}[system_name],
             featurize=featurize,
             model_optimizer=optax.adabelief(learning_rate=1e-4),
             tau=1,  # NOTE: physically not true, but likely not a problem
-            n_iters=1000,
+            n_iters=4000,
         )
         model_class = proposed_model_class
     elif model_type.startswith("gp_"):
