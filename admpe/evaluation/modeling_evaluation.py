@@ -1,8 +1,6 @@
 import pathlib
 
-
 import jax
-import jax.numpy as jnp
 import equinox as eqx
 
 from dmpe.utils.density_estimation import build_grid
@@ -65,6 +63,7 @@ def evaluate_model_prediction(
     wrapped_model: ModelWrapper,
     wrapped_env: EnvWrapper,
     validation_points: jax.Array | None = None,
+    *,
     return_predictions: bool = False,
 ):
     pred, pred_gt = model_prediction(wrapped_model, wrapped_env, validation_points)
@@ -82,11 +81,51 @@ def evaluate_model_single_transitions():
     raise NotImplementedError()
 
 
-def evaluate_model_rollout():
-    raise NotImplementedError()
+def evaluate_model_rollout(
+    wrapped_model,
+    observations,
+    actions,
+    *,
+    horizons: list[int] | None = None,
+    return_predictions: bool = False,
+):
+
+    if observations.ndim != 3 or actions.ndim != 3:
+        raise ValueError("Expected three-dimensional trajectory arrays.")
+    if observations.shape[0] != actions.shape[0]:
+        raise ValueError("Trajectory counts must match.")
+    if observations.shape[1] != actions.shape[1] + 1:
+        raise ValueError("Each trajectory needs one more state than action.")
+
+    pred_observations = eqx.filter_vmap(wrapped_model.rollout, in_axes=(0, 0, None))(
+        observations[:, 0, :], actions, 1.0
+    )
+
+    feat_observations = wrapped_model.featurize(observations)
+
+    result = {
+        "metrics": rollout_metrics(
+            reference=feat_observations,
+            prediction=pred_observations,
+            horizons=horizons,
+        )
+    }
+    if return_predictions:
+        result["rollout_predictions"] = pred_observations
+        result["gt"] = feat_observations
+
+    return result
 
 
 def evaluate_model():
+
+    # load query points for one-step prediction
+    # load testing trajectories for model-rollout testing
+
+    # evaluate model performance
+
+    # store results
+
     raise NotImplementedError()
 
 

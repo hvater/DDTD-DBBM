@@ -42,7 +42,7 @@ def rollout_metrics(reference, prediction, *, horizons=None):
     """Inputs have shape (n_trajectories, n_steps + 1, n_features)."""
 
     if reference.shape != prediction.shape:
-        raise ValueError("Reference and prediction shapes must match.")
+        raise ValueError(f"Reference and prediction shapes must match. {reference.shape} != {prediction.shape}")
     if reference.ndim != 3:
         raise ValueError("Expected input shape to be (n_trajectories, n_steps + 1, n_features).")
     if reference.shape[-2] < 2:
@@ -65,11 +65,12 @@ def rollout_metrics(reference, prediction, *, horizons=None):
     results["rmse_per_trajectory"] = jnp.sqrt(jnp.mean(squared_error, axis=(1, 2)))
     results["nonfinite_trajectory_fraction"] = jnp.mean(~jnp.all(jnp.isfinite(future_prediction), axis=(1, 2)))
 
-    results["horizons"] = {
-        int(h): {
-            "terminal": prediction_metrics(reference[:, h], prediction[:, h]),
-            "averaged": prediction_metrics(reference[:, 1 : h + 1], prediction[:, 1 : h + 1]),
+    if horizons is not None:
+        results["horizons"] = {
+            int(h): {
+                "terminal": prediction_metrics(reference[:, h], prediction[:, h]),
+                "averaged": prediction_metrics(reference[:, 1 : h + 1], prediction[:, 1 : h + 1]),
+            }
+            for h in horizons
         }
-        for h in horizons
-    }
     return results
