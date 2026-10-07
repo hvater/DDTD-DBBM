@@ -60,12 +60,11 @@ class NodeModelWrapper(ModelWrapper):
     model: NeuralEulerODE
     featurize: callable
 
+    @eqx.filter_jit
     def step(self, obs, action, tau):
         return self.featurize(self.model.step(obs, action, tau))
 
-    def derivative(self, obs, action):
-        return self.model.func(obs, action)
-
+    @eqx.filter_jit
     def rollout(self, init_obs, actions, tau):
         pred = self.model(init_obs, actions, tau)
         return eqx.filter_vmap(self.featurize)(pred)
