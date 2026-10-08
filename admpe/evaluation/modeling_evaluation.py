@@ -151,7 +151,7 @@ def update_modeling_df(
     df: pd.DataFrame,
     result_paths: list[pathlib.Path],
 ):
-    """Append modeling experiments that are not already recorded.
+    """Append new modeling experiments and fill in their excitation objectives.
 
     Args:
         df: Existing dataframe, or None to start a new one.
@@ -170,6 +170,16 @@ def update_modeling_df(
         raise ValueError("The dataframe must contain an 'exp_id' column.")
     if df["exp_id"].isna().any() or df["exp_id"].duplicated().any():
         raise ValueError("Existing experiment exp_ids must be nonempty and unique.")
+
+    excitation_objectives = {}
+
+    def get_excitation_objective(dataset_path):
+        # Older metadata stores paths as repr(PosixPath(...)).
+        dataset_path = pathlib.Path(str(dataset_path).removeprefix("PosixPath('").removesuffix("')"))
+        if dataset_path not in excitation_objectives:
+            excitation_metadata = json.loads((dataset_path / "experiment.json").read_text())
+            excitation_objectives[dataset_path] = excitation_metadata["excitation_objective"]
+        return excitation_objectives[dataset_path]
 
     existing_exp_ids = set(df["exp_id"])
     new_rows = []
@@ -202,6 +212,7 @@ def update_modeling_df(
             model_type=metadata["model_type"],
             training_seed=metadata["seed"],
             dataset_path=metadata["dataset_path"],
+            excitation_objective=get_excitation_objective(metadata["dataset_path"]),
             use_f64=metadata.get("use_f64"),
         )
 
