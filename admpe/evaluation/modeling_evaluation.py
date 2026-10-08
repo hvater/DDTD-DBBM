@@ -1,17 +1,22 @@
 import pathlib
+import json
+
+import tqdm
+import pandas as pd
+import numpy as np
 
 import jax
 import equinox as eqx
 
 from dmpe.utils.density_estimation import build_grid
 
-from admpe.data_management import load_excitation_result
+from admpe.data_management import load_excitation_result, load_modeling_result
 
 from admpe.evaluation.modeling_metrics import (
     prediction_metrics,
     rollout_metrics,
 )
-from admpe.evaluation.model_wrapping import EnvWrapper, ModelWrapper
+from admpe.evaluation.model_wrapping import EnvWrapper, ModelWrapper, get_wrapped_model_and_env
 
 
 def load_corresponding_excitation_result(modeling_result):
@@ -129,5 +134,92 @@ def evaluate_model():
     raise NotImplementedError()
 
 
-def update_modeling_df():
-    raise NotImplementedError()
+def to_python(value):
+    """Transforms all jax arrays to floats or lists for storing in the results df."""
+
+    if isinstance(value, dict):
+        return {key: to_python(item) for key, item in value.items()}
+
+    if isinstance(value, jax.Array):
+        array = np.asarray(value)
+        return float(array.item()) if array.ndim == 0 else array.tolist()
+
+    return value
+
+
+def update_modeling_df(
+    df: pd.DataFrame,
+    result_paths: list[pathlib.Path],
+):
+    """Append modeling experiments that are not already recorded.
+
+    Args:
+        df: Existing dataframe, or None to start a new one.
+        result_paths: Paths to modeling experiment directories.
+
+    Returns:
+        A new dataframe containing existing and newly evaluated results.
+    """
+
+    if df is None:
+        df = pd.DataFrame(columns=["exp_id"])
+    else:
+        df = df.copy()
+
+    if "exp_id" not in df.columns:
+        raise ValueError("The dataframe must contain an 'exp_id' column.")
+    if df["exp_id"].isna().any() or df["exp_id"].duplicated().any():
+        raise ValueError("Existing experiment exp_ids must be nonempty and unique.")
+
+    existing_exp_ids = set(df["exp_id"])
+    new_rows = []
+    for result_path in tqdm.tqdm(result_paths):
+        # TODO: actually reduce the result_paths to only paths...
+        result_path = pathlib.Path(result_path["path"])
+
+        metadata = json.loads((result_path / "experiment.json").read_text())
+        exp_id = metadata["exp_id"]
+
+        if exp_id in existing_exp_ids:
+            continue
+
+        if metadata.get("status") != "completed":
+            raise ValueError(f"Experiment is not completed: {result_path}")
+
+        result = load_modeling_result(result_path)
+
+        # TODO: extend to rollout + prediction + all other relevant metrics
+        # use 'evaluate_model'
+        wrapped_model, wrapped_env = get_wrapped_model_and_env(result)
+        metrics_jax = evaluate_model_prediction(wrapped_model, wrapped_env)
+
+        metrics = to_python(metrics_jax)
+
+        row = dict(
+            exp_id=exp_id,
+            path=str(result_path),
+            system_name=metadata["system_name"],
+            model_type=metadata["model_type"],
+            training_seed=metadata["seed"],
+            dataset_path=metadata["dataset_path"],
+            use_f64=metadata.get("use_f64"),
+        )
+
+        if row.keys() & metrics.keys():
+            raise ValueError("Metric names overlap with metadata columns.")
+        row.update(metrics)
+        new_rows.append(row)
+        existing_exp_ids.add(exp_id)
+
+    if not new_rows:
+        return df
+
+    new_df_entries = pd.json_normalize(
+        [to_python(run) for run in new_rows],
+        sep=".",
+    )
+
+    return pd.concat(
+        [df, new_df_entries],
+        ignore_index=True,
+    )

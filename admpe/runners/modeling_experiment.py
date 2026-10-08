@@ -71,7 +71,7 @@ def run_experiment_for_seed(
         use_f64=bool(jax.config.jax_enable_x64),
         device=str(jax.config.jax_default_device),
         status="running",
-        dataset_path=dataset_path,
+        dataset_path=str(dataset_path),
     )
     write_metadata(working_path / "experiment.json", metadata)
 
