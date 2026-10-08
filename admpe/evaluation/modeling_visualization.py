@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import numpy as np
 
 import jax
@@ -7,6 +8,103 @@ import equinox as eqx
 
 from admpe.evaluation.model_wrapping import EnvWrapper, ModelWrapper
 from admpe.evaluation.modeling_evaluation import model_prediction
+
+
+def visualize_model_metric_boxplots(df, *, log_scale: bool = False, figure_width: float = 6.0):
+    """Plot RMSE, MAE and WCE by model and excitation objective for each system.
+
+    Each box contains the finite metric values from individual modeling runs.
+    The sample count above each box excludes missing and infinite values.
+    Returns a dictionary mapping system names to (figure, axes) pairs.
+    """
+    metrics = {"metrics.rmse": "RMSE", "metrics.mae": "MAE", "metrics.wce": "WCE"}
+    required = {"system_name", "model_type", "excitation_objective", *metrics}
+    missing = required.difference(df.columns)
+    if missing:
+        raise ValueError(f"Missing dataframe columns: {sorted(missing)}")
+
+    objectives = sorted(df["excitation_objective"].dropna().unique())
+    colors = plt.get_cmap("tab10")
+    objective_colors = {objective: colors(i % colors.N) for i, objective in enumerate(objectives)}
+    figures = {}
+
+    for system_name, system_df in df.groupby("system_name", sort=True):
+        model_types = sorted(system_df["model_type"].dropna().unique())
+        system_objectives = [
+            objective for objective in objectives if objective in system_df["excitation_objective"].values
+        ]
+        if not model_types or not system_objectives:
+            continue
+
+        fig, axes = plt.subplots(1, len(metrics), figsize=(figure_width, 3.5), constrained_layout=True)
+        box_width = 0.8 / len(system_objectives)
+
+        for ax, (metric, label) in zip(axes, metrics.items()):
+            for model_index, model_type in enumerate(model_types):
+                for objective_index, objective in enumerate(system_objectives):
+                    group = system_df.loc[
+                        (system_df["model_type"] == model_type) & (system_df["excitation_objective"] == objective),
+                        metric,
+                    ]
+                    values = group.to_numpy(dtype=float)
+                    values = values[np.isfinite(values)]
+                    if log_scale and np.any(values <= 0):
+                        raise ValueError(f"Logarithmic plots require positive {metric} values for {system_name}.")
+
+                    position = model_index + (objective_index - (len(system_objectives) - 1) / 2) * box_width
+                    color = objective_colors[objective]
+                    if values.size:
+                        ax.boxplot(
+                            [values],
+                            positions=[position],
+                            widths=box_width * 0.8,
+                            patch_artist=True,
+                            manage_ticks=False,
+                            boxprops={"facecolor": color, "edgecolor": color, "alpha": 0.7},
+                            whiskerprops={"color": color},
+                            capprops={"color": color},
+                            medianprops={"color": "black", "linewidth": 1.5},
+                            flierprops={"marker": ".", "markeredgecolor": color, "alpha": 0.6},
+                        )
+                    ax.text(
+                        position,
+                        0.98,
+                        f"n={values.size}",
+                        transform=ax.get_xaxis_transform(),
+                        ha="center",
+                        va="top",
+                        fontsize=8,
+                        color=color,
+                    )
+
+            if log_scale:
+                ax.set_yscale("log")
+            ax.set_title(label)
+            ax.set_xlabel("Model type")
+            ax.set_xticks(range(len(model_types)), [model.replace("_", " ") for model in model_types])
+            ax.set_xlim(-0.5, len(model_types) - 0.5)
+            ax.margins(y=0.15)
+            ax.grid("both", alpha=0.4)
+            ax.set_axisbelow(True)
+            # ax.spines[["top", "right"]].set_visible(False)
+
+        axes[0].set_ylabel("Error (log scale)" if log_scale else "Error")
+
+        fig.suptitle(system_name.replace("_", " ").title(), fontsize=16)
+        fig.legend(
+            handles=[
+                Patch(facecolor=objective_colors[objective], alpha=0.7, label=objective.replace("_", " "))
+                for objective in system_objectives
+            ],
+            title="Excitation objective",
+            loc="lower center",
+            bbox_to_anchor=(0.5, -0.15),
+            ncol=len(system_objectives),
+            frameon=True,
+        )
+        figures[system_name] = (fig, axes)
+
+    return figures
 
 
 def visualize_model_prediction(
