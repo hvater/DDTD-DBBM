@@ -184,8 +184,11 @@ def update_modeling_df(
     existing_exp_ids = set(df["exp_id"])
     new_rows = []
     for result_path in tqdm.tqdm(result_paths):
-        # TODO: actually reduce the result_paths to only paths...
-        result_path = pathlib.Path(result_path["path"])
+
+        try:
+            result_path = pathlib.Path(result_path)
+        except TypeError:
+            result_path = pathlib.Path(result_path["path"])
 
         metadata = json.loads((result_path / "experiment.json").read_text())
         exp_id = metadata["exp_id"]
@@ -223,7 +226,10 @@ def update_modeling_df(
         existing_exp_ids.add(exp_id)
 
     if not new_rows:
+        print("No new entries have been found. Returing data as provided.")
         return df
+
+    print(f"{len(new_rows)} new modeling results have been found and added to the provided data frame.")
 
     new_df_entries = pd.json_normalize(
         [to_python(run) for run in new_rows],
