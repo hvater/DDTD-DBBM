@@ -23,13 +23,39 @@ def aprbs(
     batch_size: int,
     key: jax.random.PRNGKey,
     *,
+    n_actions: int = 1,
     transition_type: str = "step",
     transition_steps: int = 0,
 ):
+    if not 1 <= t_min < t_max:
+        raise ValueError("Require 1 <= t_min < t_max; t_max is exclusive.")
+
     if transition_type not in ("step", "linear", "cosine", "quintic"):
         raise ValueError(f"Unknown transition: {transition_type}")
 
-    raise NotImplementedError()
+    if transition_type != "step" and not 0 < transition_steps < t_min:
+        raise ValueError("Require 0 < transition_steps < t_min.")
+
+    n_segments = (n_steps + t_min - 1) // t_min + 1
+    keys = jax.random.split(key, batch_size * n_actions)
+
+    time = jnp.arange(n_steps)
+
+    def one_signal(signal_key):
+        dwell_key, level_key = jax.random.split(signal_key)
+        dwell = jax.random.randint(dwell_key, (n_segments - 1,), t_min, t_max)
+        levels = jax.random.uniform(level_key, (n_segments,), minval=-1.0, maxval=1.0)
+
+        switches = jnp.cumsum(dwell)
+
+        if transition_type == "step":
+            index = jnp.searchsorted(switches, time, side="right")
+            return levels[index]
+        else:
+            raise NotImplementedError()
+
+    signals = jax.vmap(one_signal)(keys)
+    return signals.reshape(batch_size, n_actions, n_steps).transpose(0, 2, 1)
 
 
 def ramp():
