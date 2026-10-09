@@ -1,6 +1,5 @@
 """See, e.g.,
 
-```
 @book{Nelles2020,
   title={Nonlinear system identification},
   author={Nelles, Oliver},
@@ -10,6 +9,19 @@
 }
 
 for descriptions of the utilized signals.
+
+Except for the quintic smoothing of the APRBS which is based on qunitic interpolation, see, e.g.:
+
+@book{Lynch2017,
+  title={Modern Robotics: Mechanics, Planning, and Control},
+  author={Lynch, Kevin M. and Park, Frank C.},
+  year={2017},
+  publisher={Cambridge University Press},
+}
+
+and more specifically, within the accompanying code:
+https://github.com/NxRLab/ModernRobotics/blob/master/packages/MATLAB/mr/QuinticTimeScaling.m
+
 """
 
 import jax
@@ -95,16 +107,19 @@ def multisine(
     key: jax.random.PRNGKey,
     debug: bool = False,
 ) -> jax.Array:
+    """The fundamental frequency measure cycles per sample and is not given in Hz."""
+
+    assert n_sines * fundamental_frequency < 0.5, "frequencies must stay below the Nyquist frequency"
 
     t = jnp.arange(0, n_steps, 1)
     frequencies = jnp.arange(1, n_sines + 1, 1) * fundamental_frequency
 
     # draw phase_shift and amplitudes
     ampl_key, phase_key = jax.random.split(key, 2)
-    amplitudes = jax.random.uniform(ampl_key, shape=(batch_size, 1, n_sines), minval=-1, maxval=1)
+    amplitudes = jax.random.uniform(ampl_key, shape=(batch_size, 1, n_sines), minval=0, maxval=1)
     phase_shifts = jax.random.uniform(phase_key, shape=(batch_size, 1, n_sines), minval=-1, maxval=1) * jnp.pi
 
-    sines = amplitudes * jnp.sin((frequencies[None] * t[:, None])[None] + phase_shifts)
+    sines = amplitudes * jnp.sin((2 * jnp.pi * frequencies[None] * t[:, None])[None] + phase_shifts)
     actions = jnp.mean(sines, axis=-1, keepdims=True)
 
     if debug:
