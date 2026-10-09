@@ -25,7 +25,7 @@ def aprbs(
     *,
     n_actions: int = 1,
     transition_type: str = "step",
-    transition_steps: int = 0,
+    transition_steps: int = 1,
 ):
     if not 1 <= t_min < t_max:
         raise ValueError("Require 1 <= t_min < t_max; t_max is exclusive.")
@@ -51,8 +51,33 @@ def aprbs(
         if transition_type == "step":
             index = jnp.searchsorted(switches, time, side="right")
             return levels[index]
+
+        # Each transition begins half its duration before the switch, i.e., the switch
+        # would occur at the middle of the transition for a step aprbs
+        starts = switches - transition_steps / 2
+
+        # get targeted index and level + previous index and level
+        index = jnp.searchsorted(starts, time, side="right")
+        previous_index = jnp.maximum(index - 1, 0)
+        previous = levels[previous_index]
+        target = levels[index]
+
+        # fraction of transition completed
+        phase = jnp.clip(
+            (time - starts[previous_index]) / transition_steps,
+            0.0,
+            1.0,
+        )
+
+        if transition_type == "linear":
+            weight = phase
+        elif transition_type == "cosine":
+            weight = 0.5 * (1.0 - jnp.cos(jnp.pi * phase))
         else:
-            raise NotImplementedError()
+            weight = phase**3 * (10.0 + phase * (-15.0 + 6.0 * phase))
+
+        weight = jnp.clip(weight, 0.0, 1.0)
+        return (1.0 - weight) * previous + weight * target
 
     signals = jax.vmap(one_signal)(keys)
     return signals.reshape(batch_size, n_actions, n_steps).transpose(0, 2, 1)
