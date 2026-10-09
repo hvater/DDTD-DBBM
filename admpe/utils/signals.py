@@ -37,7 +37,12 @@ def ramp():
 
 
 def multisine(
-    n_steps: int, fundamental_frequency: float, n_sines: int, batch_size: int, key: jax.random.PRNGKey
+    n_steps: int,
+    fundamental_frequency: float,
+    n_sines: int,
+    batch_size: int,
+    key: jax.random.PRNGKey,
+    debug: bool = False,
 ) -> jax.Array:
 
     t = jnp.arange(0, n_steps, 1)
@@ -45,13 +50,16 @@ def multisine(
 
     # draw phase_shift and amplitudes
     ampl_key, phase_key = jax.random.split(key, 2)
-
     amplitudes = jax.random.uniform(ampl_key, shape=(batch_size, 1, n_sines), minval=-1, maxval=1)
     phase_shifts = jax.random.uniform(phase_key, shape=(batch_size, 1, n_sines), minval=-1, maxval=1) * jnp.pi
 
-    actions = jnp.mean(amplitudes * jnp.sin((frequencies[None] * t[:, None])[None] + phase_shifts), axis=-1)
+    sines = amplitudes * jnp.sin((frequencies[None] * t[:, None])[None] + phase_shifts)
+    actions = jnp.mean(sines, axis=-1, keepdims=True)
 
-    return actions[..., None], amplitudes * jnp.sin((frequencies[None] * t[:, None])[None] + phase_shifts)
+    if debug:
+        return actions, sines
+
+    return actions
 
 
 def chirp():
