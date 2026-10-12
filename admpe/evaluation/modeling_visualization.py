@@ -182,6 +182,7 @@ def visualize_model_rollouts(
     feat_observations = feat_observations[:, :max_trajectory_length, :]
 
     n_trajectories, n_observations, obs_dim = feat_observations.shape
+    action_dim = actions.shape[-1]
 
     if obs_labels is None:
         obs_labels = np.arange(0, obs_dim, 1)
@@ -202,9 +203,9 @@ def visualize_model_rollouts(
     time = np.arange(n_observations)
 
     fig, axs = plt.subplots(
-        nrows=obs_dim,
+        nrows=obs_dim + action_dim,
         ncols=len(indices),
-        figsize=(4 * len(indices), 2.5 * obs_dim),
+        figsize=(4 * len(indices), 2.5 * (obs_dim + action_dim)),
         sharex=True,
         sharey="row",
         squeeze=False,
@@ -236,8 +237,22 @@ def visualize_model_rollouts(
                 ax.set_ylabel(obs_labels[component])
             if component == 0:
                 ax.set_title(f"Trajectory {trajectory_index}")
-            if component == obs_dim - 1:
-                ax.set_xlabel("Time [s]")
+
+        if action_dim == 1:
+            ax = axs[-1, column]
+
+            ax.plot(
+                time[:-1],
+                actions[trajectory_index, :, 0],
+                color="black",
+                linewidth=1.5,
+            )
+            ax.grid(alpha=0.3)
+            ax.set_xlabel("Time [s]")
+            if column == 0:
+                ax.set_ylabel("action")
+        else:
+            raise NotImplementedError()
 
     axs[0, 0].legend()
     return fig, axs
