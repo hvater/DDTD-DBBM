@@ -105,22 +105,33 @@ def multisine(
     n_sines: int,
     batch_size: int,
     key: jax.random.PRNGKey,
+    *,
+    n_actions: int = 1,
     debug: bool = False,
 ) -> jax.Array:
     """The fundamental frequency measure cycles per sample and is not given in Hz."""
 
     assert n_sines * fundamental_frequency < 0.5, "frequencies must stay below the Nyquist frequency"
 
-    t = jnp.arange(0, n_steps, 1)
+    time = jnp.arange(n_steps)
     frequencies = jnp.arange(1, n_sines + 1, 1) * fundamental_frequency
 
-    # draw phase_shift and amplitudes
-    ampl_key, phase_key = jax.random.split(key, 2)
-    amplitudes = jax.random.uniform(ampl_key, shape=(batch_size, 1, n_sines), minval=0, maxval=1)
-    phase_shifts = jax.random.uniform(phase_key, shape=(batch_size, 1, n_sines), minval=-1, maxval=1) * jnp.pi
+    keys = jax.random.split(key, batch_size * n_actions)
 
-    sines = amplitudes * jnp.sin((2 * jnp.pi * frequencies[None] * t[:, None])[None] + phase_shifts)
-    actions = jnp.mean(sines, axis=-1, keepdims=True)
+    def one_signal(signal_key):
+        # draw phase_shift and amplitudes
+        ampl_key, phase_key = jax.random.split(signal_key, 2)
+        amplitudes = jax.random.uniform(ampl_key, shape=(1, n_sines), minval=0, maxval=1)
+        phase_shifts = jax.random.uniform(phase_key, shape=(1, n_sines), minval=-1, maxval=1) * jnp.pi
+
+        sines = amplitudes * jnp.sin((2 * jnp.pi * frequencies[None] * time[:, None]) + phase_shifts)
+        actions = jnp.mean(sines, axis=-1)
+
+        return actions, sines
+
+    actions, sines = jax.vmap(one_signal)(keys)
+    sines = sines.reshape(batch_size, n_actions, n_steps, n_sines).transpose(0, 2, 1, 3)
+    actions = actions.reshape(batch_size, n_actions, n_steps).transpose(0, 2, 1)
 
     if debug:
         return actions, sines
