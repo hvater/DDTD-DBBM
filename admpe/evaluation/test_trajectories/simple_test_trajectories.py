@@ -249,6 +249,10 @@ def generate_testing_dataset(
                 metadata["feasible_candidates"],
                 metadata["attempted"],
             )
+        metadata["status"] = "combining"
+        write_metadata(working_path / "experiment.json", metadata)
+        dataset_path = combine_sequences(working_path, n_sequences)
+        metadata["dataset_file"] = dataset_path.name
         metadata["status"] = "completed"
         metadata["elapsed_seconds"] = perf_counter() - started
         write_metadata(working_path / "experiment.json", metadata)
@@ -329,3 +333,26 @@ def run_testing_dataset_experiment(
             raise
         finally:
             jax.clear_caches()
+
+
+def combine_sequences(path: Path, n_sequences: int) -> Path:
+    """Stack sequence archives into dataset.npz, then remove the source archives."""
+
+    source_files = [path / f"sequence_{index:06d}.npz" for index in range(n_sequences)]
+    names = ("observations", "actions", "max_penalty", "candidate_id")
+    collected = {name: [] for name in names}
+
+    for source_file in source_files:
+        with np.load(source_file, allow_pickle=False) as sequence:
+            for name in names:
+                collected[name].append(sequence[name])
+
+    stacked = {name: np.stack(values, axis=0) for name, values in collected.items()}
+
+    destination = path / "dataset.npz"
+    np.savez_compressed(destination, **stacked)
+
+    for source_file in source_files:
+        source_file.unlink()
+
+    return destination
