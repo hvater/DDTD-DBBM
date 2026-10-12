@@ -390,3 +390,85 @@ def provide_modeling_results_overview(results: dict):
         "model_lr": "params.model_trainer_params.model_optimizer.lr",
     }
     return provide_results_overview(results, MODELING_OVERVIEW_FIELDS)
+
+
+def load_testing_sequences(
+    system_name: str,
+    paths: list[Path] | None = None,
+    *,
+    root: str | Path = TESTING_TRAJECTORIES_ROOT,
+):
+    # paths are not specified, look for results below root
+    discover = paths is None
+    if discover:
+        paths = [file.parent for file in sorted(Path(root).rglob("experiment.json"))]
+
+    grouped = {}
+    seen = set()
+
+    for selected_path in paths:
+        selected_path = Path(selected_path)
+        folder = selected_path if selected_path.is_dir() else selected_path.parent
+        metadata = json.loads((folder / "experiment.json").read_text())
+
+        # check that the system_name is fitting and the experiment is completed
+        if metadata.get("system_name") != system_name or metadata.get("status") != "completed":
+            if discover:
+                continue
+            raise ValueError(f"Not a completed {system_name!r} testing run: {folder}")
+
+        archive_path = (
+            folder / metadata.get("dataset_file", "dataset.npz") if selected_path.is_dir() else selected_path
+        ).resolve()
+
+        if archive_path in seen:
+            continue
+        seen.add(archive_path)
+
+        # load observations, actions
+        with np.load(archive_path, allow_pickle=False) as archive:
+            arrays = {name: archive[name] for name in ("observations", "actions")}
+        observations = arrays["observations"]
+        actions = arrays["actions"]
+
+        if observations.ndim != 3 or actions.ndim != 3:
+            raise ValueError(f"Expected three-dimensional trajectory arrays: {archive_path}")
+        if observations.shape[0] != actions.shape[0] or observations.shape[1] != actions.shape[1] + 1:
+            raise ValueError(f"Observation/action counts do not match: {archive_path}")
+
+        signal_name = metadata["signal_name"]
+        if signal_name not in grouped:
+            grouped[signal_name] = {"observations": [], "actions": []}
+
+        observation_chunks = grouped[signal_name]["observations"]
+        action_chunks = grouped[signal_name]["actions"]
+
+        if observation_chunks:
+            if observations.shape[1:] != observation_chunks[0].shape[1:]:
+                raise ValueError(f"Incompatible observation dimensions for {signal_name!r}: " f"{archive_path}")
+            if actions.shape[1:] != action_chunks[0].shape[1:]:
+                raise ValueError(f"Incompatible action dimensions for {signal_name!r}: " f"{archive_path}")
+
+        observation_chunks.append(observations)
+        action_chunks.append(actions)
+
+    # stack all arrays for a signal class together:
+    result = {}
+
+    for signal, group in grouped.items():
+        observation_chunks = group["observations"]
+        action_chunks = group["actions"]
+
+        if len(observation_chunks) == 1:
+            observations = observation_chunks[0]
+            actions = action_chunks[0]
+        else:
+            observations = np.concatenate(observation_chunks, axis=0)
+            actions = np.concatenate(action_chunks, axis=0)
+
+        result[signal] = {
+            "observations": observations,
+            "actions": actions,
+        }
+
+    return result
