@@ -23,11 +23,10 @@ def load_corresponding_excitation_result(modeling_result):
     """TODO: Move to a modeling result dataclass? Also visualizations could go in there"""
 
     try:
-        excitation_result = load_excitation_result(modeling_result["metadata"]["dataset_path"])
+        excitation_result = load_excitation_result(pathlib.Path(modeling_result["metadata"]["dataset_path"]))
     except FileNotFoundError:
-
         path = pathlib.Path(modeling_result["metadata"]["dataset_path"].removeprefix("PosixPath('").removesuffix("')"))
-        excitation_result = load_excitation_result(path)
+        excitation_result = load_excitation_result(pathlib.Path(path))
 
     return excitation_result
 
