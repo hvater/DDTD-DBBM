@@ -107,6 +107,31 @@ def visualize_model_metric_boxplots(df, *, log_scale: bool = False, figure_width
     return figures
 
 
+def visualize_model_prediction_metric_boxplots(
+    df,
+    *,
+    log_scale: bool = False,
+    figure_width: float = 6.0,
+):
+    """Return {system_name: (figure, axes)} for prediction errors."""
+    metadata = ["system_name", "model_type", "excitation_objective"]
+    rename = {f"prediction.metrics.{metric}": f"metrics.{metric}" for metric in ("rmse", "mae", "wce")}
+
+    columns = metadata + list(rename)
+    missing = set(columns).difference(df.columns)
+    if missing:
+        raise ValueError(f"Missing dataframe columns: {sorted(missing)}")
+
+    plot_df = df.loc[:, columns].rename(columns=rename)
+    plot_df = plot_df.dropna(subset=list(rename.values()), how="all")
+
+    return visualize_model_metric_boxplots(
+        plot_df,
+        log_scale=log_scale,
+        figure_width=figure_width,
+    )
+
+
 def visualize_model_prediction(
     validation_points_per_dim: int,
     wrapped_model: ModelWrapper,
@@ -154,6 +179,60 @@ def visualize_model_prediction(
     fig.tight_layout()
 
     return fig, axs
+
+
+def visualize_model_rollout_metric_boxplots(
+    df,
+    *,
+    signals: list[str] | None = None,
+    log_scale: bool = False,
+    figure_width: float = 6.0,
+):
+    """Return {(system_name, signal): (figure, axes)} for rollout errors.
+
+    Automatically discovers test signals when signals=None.
+    Finite-value filtering and sample counts follow the existing plotter.
+    """
+    metadata = ["system_name", "model_type", "excitation_objective"]
+    metrics = ("rmse", "mae", "wce")
+
+    if signals is None:
+        signals = sorted(
+            {
+                column.removeprefix("rollout.").removesuffix(".metrics.rmse")
+                for column in df.columns
+                if column.startswith("rollout.") and column.endswith(".metrics.rmse")
+            }
+        )
+
+    if not signals:
+        raise ValueError("No rollout signals found; expected " "rollout.<signal>.metrics.rmse columns.")
+
+    figures = {}
+
+    for signal in signals:
+        rename = {f"rollout.{signal}.metrics.{metric}": f"metrics.{metric}" for metric in metrics}
+        missing = set(metadata + list(rename)).difference(df.columns)
+        if missing:
+            raise ValueError(f"Missing dataframe columns: {sorted(missing)}")
+
+        plot_df = df.loc[:, metadata + list(rename)].rename(columns=rename)
+        plot_df = plot_df.dropna(subset=list(rename.values()), how="all")
+
+        signal_figures = visualize_model_metric_boxplots(
+            plot_df,
+            log_scale=log_scale,
+            figure_width=figure_width,
+        )
+
+        for system_name, (fig, axes) in signal_figures.items():
+            fig.suptitle(
+                f"{system_name.replace('_', ' ').title()} — " f"{signal.replace('_', ' ')}",
+                fontsize=16,
+            )
+            figures[(system_name, signal)] = (fig, axes)
+
+    return figures
 
 
 def visualize_model_rollouts(
