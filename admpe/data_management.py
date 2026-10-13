@@ -302,6 +302,7 @@ def list_modeling_results(
     path: Path | None = None,
     system_name: str | list[str] | None = None,
     model_type: str | list[str] | None = None,
+    excitation_objective: str | list[str] | None = None,
     exp_name: str | None = None,
     enforce_identical_exp_name: bool = True,
     status: str | list[str] | None = "completed",
@@ -319,6 +320,8 @@ def list_modeling_results(
         normalize(model_type),
     ]
     allowed_statuses = normalize(status)
+
+    allowed_excitation_objective = normalize(excitation_objective)
 
     results = []
     for folder in root.iterdir():
@@ -355,10 +358,15 @@ def list_modeling_results(
         try:
             metadata = json.loads((folder / "experiment.json").read_text())
             actual_status = metadata.get("status", "unknown")
+            actual_excitation_objective = metadata.get("excitation_objective", "unknown")
         except (OSError, json.JSONDecodeError):
             actual_status = "unknown"
+            actual_excitation_objective = "unknown"
 
         if allowed_statuses is not None and actual_status not in allowed_statuses:
+            continue
+
+        if allowed_excitation_objective is not None and actual_excitation_objective not in allowed_excitation_objective:
             continue
 
         results.append(

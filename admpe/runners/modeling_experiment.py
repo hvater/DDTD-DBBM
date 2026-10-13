@@ -72,6 +72,7 @@ def run_experiment_for_seed(
         device=str(jax.config.jax_default_device),
         status="running",
         dataset_path=str(dataset_path),
+        excitation_objective=train_data["metadata"]["excitation_objective"],
     )
     write_metadata(working_path / "experiment.json", metadata)
 
