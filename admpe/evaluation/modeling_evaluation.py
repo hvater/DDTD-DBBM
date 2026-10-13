@@ -37,8 +37,8 @@ def generate_default_prediction_validation_points(dim, validation_points_per_dim
 
     return build_grid(
         dim=dim,
-        low=-1.05,
-        high=1.05,
+        low=-1.0,
+        high=1.0,
         points_per_dim=validation_points_per_dim,
     )
 
