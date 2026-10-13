@@ -82,6 +82,16 @@ def run_experiment_for_seed(
         metadata["params"] = params
         write_metadata(working_path / "experiment.json", metadata)
 
+        log.info(
+            "Starting run %s: modeling_seed=%d; dataset=%s; objective=%s; device=%s; precision=%s",
+            exp_id,
+            seed,
+            dataset_path.resolve(),
+            metadata["excitation_objective"],
+            metadata["device"],
+            "float64" if metadata["use_f64"] else "float32",
+        )
+
         result = fit(
             train_data,
             model_type,
@@ -161,15 +171,45 @@ def run_modeling_experiment(
 
     tag = f"-{exp_name}" if exp_name else ""
 
+    log.info(
+        "Starting modeling experiments: system=%s; model_type=%s; #datasets=%d; modeling_seeds=%s; total_trials=%d; device=%s",
+        system_name,
+        model_type,
+        len(dataset_paths),
+        seeds_to_run,
+        len(dataset_paths) * len(seeds_to_run),
+        devices[index],
+    )
+
     # start experiment:
     paths = []
     with jax.default_device(devices[index]):
         # TODO: load validation and test data sets?
         # maybe validation would be sufficient and test data can be done separately?
 
-        for dataset_path in dataset_paths:
+        for dataset_idx, dataset_path in enumerate(dataset_paths, start=1):
+            dataset_path = Path(dataset_path)
+            log.info(
+                "Loading excitation dataset %d/%d: %s",
+                dataset_idx,
+                len(dataset_paths),
+                dataset_path.resolve(),
+            )
+
             try:
                 train_data = load_excitation_result(dataset_path)
+
+                log.info(
+                    "Loaded excitation dataset: system=%s; objective=%s; "
+                    "excitation_seed=%s; transitions=%d; observations_shape=%s; actions_shape=%s",
+                    train_data["metadata"]["system_name"],
+                    train_data["metadata"]["excitation_objective"],
+                    train_data["metadata"]["seed"],
+                    train_data["actions"].shape[0],
+                    train_data["observations"].shape,
+                    train_data["actions"].shape,
+                )
+
                 _, _, featurize, _, model_class = setup_environment(system_name)
                 params = setup_parameterization(
                     train_data,
