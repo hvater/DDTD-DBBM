@@ -10,7 +10,7 @@ import equinox as eqx
 
 from dmpe.utils.density_estimation import build_grid
 
-from admpe.data_management import load_excitation_result, load_modeling_result
+from admpe.data_management import load_excitation_result, load_modeling_result, load_testing_sequences
 
 from admpe.evaluation.modeling_metrics import (
     prediction_metrics,
@@ -121,16 +121,28 @@ def evaluate_model_rollout(
     return result
 
 
-def evaluate_model():
+def evaluate_model(
+    system_name: str,
+    wrapped_model: ModelWrapper,
+    wrapped_env: EnvWrapper,
+):
+    prediction_metric_values = evaluate_model_prediction(wrapped_model, wrapped_env)
 
-    # load query points for one-step prediction
-    # load testing trajectories for model-rollout testing
+    testing_data = load_testing_sequences(system_name, paths=None)
+    rollout_metric_values = {}
+    for signal_key, signal_testing_data in testing_data.items():
+        rollout_metric_values[signal_key] = evaluate_model_rollout(
+            wrapped_model,
+            observations=signal_testing_data["observations"],
+            actions=signal_testing_data["actions"],
+        )
 
-    # evaluate model performance
+    result = {
+        "prediction": prediction_metric_values,
+        "rollout": rollout_metric_values,
+    }
 
-    # store results
-
-    raise NotImplementedError()
+    return result
 
 
 def to_python(value):
@@ -200,10 +212,8 @@ def update_modeling_df(
 
         result = load_modeling_result(result_path)
 
-        # TODO: extend to rollout + prediction + all other relevant metrics
-        # use 'evaluate_model'
         wrapped_model, wrapped_env = get_wrapped_model_and_env(result)
-        metrics_jax = evaluate_model_prediction(wrapped_model, wrapped_env)
+        metrics_jax = evaluate_model(metadata["system_name"], wrapped_model, wrapped_env)
 
         metrics = to_python(metrics_jax)
 
