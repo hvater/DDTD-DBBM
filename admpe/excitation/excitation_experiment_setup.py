@@ -18,7 +18,13 @@ from admpe.vector_fields import DynamicsVectorField
 from admpe.excitation.excitation_parameterization import fetch_parameterization
 
 SUPPORTED_SYSTEMS = ("fluid_tank", "pendulum", "cart_pole")
-SUPPORTED_OBJECTIVES = ("dmpe_uniform", "dmpe_static_dynamics", "gp_grid", "gp_trajectory")
+SUPPORTED_OBJECTIVES = (
+    "dmpe_uniform",
+    "dmpe_static_dynamics",  # mixture of dynamics based and uniform
+    "dmpe_static_mixture_dynamics",
+    "gp_grid",
+    "gp_trajectory",
+)
 SUPPORTED_MODELS = ("neural_euler", "perfect")
 
 _SYSTEM_SETUP = {
@@ -76,6 +82,8 @@ def setup_algorithm_parameterization(
         system_name, model_type, excitation_objective
     )
 
+    # TODO: apply overrides cannot redo, e.g., the target distribution?
+    # The order should be: define defaults, allow overrides, compute targets and trainer etc.
     alg_params = apply_overrides(alg_params, alg_overrides)
     model_trainer_params = apply_overrides(model_trainer_params, model_trainer_overrides)
     model_params = apply_overrides(model_params, model_overrides)
@@ -128,6 +136,24 @@ def setup_algorithm_parameterization(
             act_dim=env.action_dim,
         )
         alg_params["target_distribution"] = target.p[0]
+
+    elif excitation_objective == "dmpe_static_mixture_dynamics":
+        uniform_distribution = alg_params["target_distribution"]
+        vf = DynamicsVectorField.from_env(
+            env,
+            alg_params["points_per_dim"],
+            low=-alg_params["grid_extend"],
+            high=alg_params["grid_extend"],
+        )
+        target = TargetDensity.from_vector_field(
+            vf=vf,
+            bandwidth=alg_params["bandwidth"],
+            penalty_function=penalty_function,
+            consider_action_distribution=alg_params["consider_action_distribution"],
+            obs_dim=env.obs_dim,
+            act_dim=env.action_dim,
+        )
+        alg_params["target_distribution"] = (target.p[0] + uniform_distribution) / 2
 
     elif excitation_objective.startswith("gp_"):
         alg_params["loss_type"] = excitation_objective.removeprefix("gp_")
