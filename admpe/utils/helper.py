@@ -18,4 +18,7 @@ def convert_lists(x):
 
 
 def pprint_helper(x):
-    return eqx.tree_pprint(convert_lists(x))
+    return eqx.tree_pprint(
+        convert_lists(x),
+        width=120,
+    )
