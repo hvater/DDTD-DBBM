@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from admpe.data_management import list_modeling_results, load_modeling_result
+from admpe.data_management import list_modeling_results, load_modeling_result, load_excitation_result
 
 
 def load_corresponding_modeling_results(
@@ -39,3 +39,23 @@ def load_corresponding_modeling_results(
             results.append(load_modeling_result(result_path["path"]))
 
     return results
+
+
+def load_excitation_comparison(excitation_results_overview, *, objectives, seed):
+    """Load exactly one run per objective for the selected excitation seed."""
+    selected_paths = {}
+
+    for objective in objectives:
+        matches = excitation_results_overview.loc[
+            excitation_results_overview["objective"].eq(objective) & excitation_results_overview["seed"].eq(seed)
+        ]
+        if len(matches) != 1:
+            raise ValueError(
+                f"{objective}, seed={seed}: expected one run, "
+                f"found {len(matches)}. Inspect the inventory "
+                "and narrow the selection."
+            )
+
+        selected_paths[objective] = matches.iloc[0]["path"]
+
+    return {objective: load_excitation_result(path) for objective, path in selected_paths.items()}
