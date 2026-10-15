@@ -22,6 +22,12 @@ def shared_density_levels(runs, *, n_levels=21, include_targets=False, per_pair=
     maxima = {}
     for run in runs.values():
         density = run["estimator"]
+        density = DensityEstimate.from_estimate(
+            p=density.p / density.p.sum(),
+            n_additional_observations=0,
+            density_estimate=density,
+        )
+
         if density.dim < 2:
             raise ValueError("Contour plots require at least two features.")
 
@@ -29,27 +35,21 @@ def shared_density_levels(runs, *, n_levels=21, include_targets=False, per_pair=
         values = [achieved]
         if include_targets:
             target = run["metadata"]["params"]["alg_params"]["target_distribution"]
-            values.append(np.asarray(target).reshape(achieved.shape))
-
-        grid = np.asarray(density.z_g)
-        widths = [np.diff(np.unique(grid[:, d])).mean() for d in range(density.dim)]
+            target = np.asarray(target).reshape(achieved.shape)
+            values.append(target / target.sum())
 
         for i, j in combinations(range(density.dim), 2):
             other_axes = tuple(d for d in range(density.dim) if d not in (i, j))
-            cell_volume = np.prod([widths[d] for d in other_axes])
 
             for p in values:
-                marginal = p.sum(axis=other_axes) * cell_volume
+                marginal = p.sum(axis=other_axes)
                 finite = marginal[np.isfinite(marginal)]
                 if finite.size == 0:
                     raise ValueError("A density plane has no finite values.")
                 maxima[i, j] = max(maxima.get((i, j), 0.0), float(finite.max()))
 
     if per_pair:
-        return {
-            pair: np.linspace(0.0, vmax if vmax > 0 else 1.0, n_levels)
-            for pair, vmax in maxima.items()
-        }
+        return {pair: np.linspace(0.0, vmax if vmax > 0 else 1.0, n_levels) for pair, vmax in maxima.items()}
 
     vmax = max(maxima.values())
     return np.linspace(0.0, vmax if vmax > 0 else 1.0, n_levels)
@@ -76,6 +76,11 @@ def plot_excitation_feature_grid(
         return plot_feature_combinations(data, labels=labels, fig=fig, axs=axs)
 
     density = result["estimator"]
+    density = DensityEstimate.from_estimate(
+        p=density.p / density.p.sum(),
+        n_additional_observations=0,
+        density_estimate=density,
+    )
 
     if view == "target":
         density = DensityEstimate.from_estimate(
@@ -87,7 +92,13 @@ def plot_excitation_feature_grid(
         raise ValueError("view must be 'samples', 'target', or 'achieved'")
 
     density_axes = axs[1, 0] if axs is not None and density.dim == 2 else axs
-    fig, _ = density.visualize(labels=labels, fig=fig, axs=density_axes, levels=levels)
+    fig, _ = density.visualize(
+        reduction_method=jnp.sum,
+        labels=labels,
+        fig=fig,
+        axs=density_axes,
+        levels=levels,
+    )
     return fig
 
 

@@ -6,6 +6,8 @@ from matplotlib.lines import Line2D
 
 import jax.numpy as jnp
 
+from dmpe.utils.density_estimation import DensityEstimate
+
 
 def visualize_rollout_on_density(
     excitation_result,
@@ -47,6 +49,11 @@ def visualize_rollout_on_density(
         predicted = np.concatenate([predicted[:-1], np.asarray(actions)], axis=-1)
 
     density = excitation_result["estimator"]
+    density = DensityEstimate.from_estimate(
+        p=density.p / density.p.sum(),
+        n_additional_observations=0,
+        density_estimate=density,
+    )
 
     if density.dim < 2 or reference.shape[1] != density.dim:
         raise ValueError("Trajectory features must match a density grid " "of at least 2 dimensions.")
@@ -56,6 +63,7 @@ def visualize_rollout_on_density(
     density_axes = axs[1, 0] if (not owns_axes and density.dim == 2) else axs
 
     fig, axes = density.visualize(
+        reduction_method=jnp.sum,
         labels=labels,
         fig=fig,
         axs=density_axes,
