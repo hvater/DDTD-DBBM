@@ -17,6 +17,7 @@ def visualize_rollout_on_density(
     labels=None,
     fig=None,
     axs=None,
+    levels=None,
 ):
     observations = jnp.asarray(test_observations)
     actions = jnp.asarray(test_actions)
@@ -58,6 +59,7 @@ def visualize_rollout_on_density(
         labels=labels,
         fig=fig,
         axs=density_axes,
+        levels=levels,
     )
 
     if density.dim == 2:
@@ -162,8 +164,9 @@ def compare_rollouts_on_density(
     max_steps=200,
     rows_per_figure=12,
     title=None,
+    levels=None,
 ):
-    """Rows: distinct feature pairs. Columns: excitation objectives."""
+    """Compare rollout feature planes with optional shared contour boundaries."""
     if not runs:
         raise ValueError("No runs selected.")
     if rows_per_figure < 1:
@@ -213,6 +216,7 @@ def compare_rollouts_on_density(
                 labels=labels,
                 fig=fig,
                 axs=grid,
+                levels=levels,
             )
 
             axes[0, column].set_title(objective.replace("dmpe_", "").replace("_", " "))
