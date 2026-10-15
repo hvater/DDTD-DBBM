@@ -8,6 +8,53 @@ from dmpe.evaluation.plotting_utils import plot_feature_combinations
 from dmpe.utils.density_estimation import DensityEstimate
 
 
+def shared_density_levels(runs, *, n_levels=21, include_targets=False, per_pair=False):
+    """Find common contour boundaries across all feature planes and objectives.
+
+    Uses the default marginal integration from DensityEstimate.visualize.
+    Include target distributions when comparing target and achieved densities.
+    With per_pair=True, return a dictionary keyed by (i, j), with i < j, so each
+    comparison row has its own scale shared across objectives.
+    """
+    if not runs or n_levels < 2:
+        raise ValueError("Select runs and request at least two levels.")
+
+    maxima = {}
+    for run in runs.values():
+        density = run["estimator"]
+        if density.dim < 2:
+            raise ValueError("Contour plots require at least two features.")
+
+        achieved = np.asarray(density.p_unflattened)
+        values = [achieved]
+        if include_targets:
+            target = run["metadata"]["params"]["alg_params"]["target_distribution"]
+            values.append(np.asarray(target).reshape(achieved.shape))
+
+        grid = np.asarray(density.z_g)
+        widths = [np.diff(np.unique(grid[:, d])).mean() for d in range(density.dim)]
+
+        for i, j in combinations(range(density.dim), 2):
+            other_axes = tuple(d for d in range(density.dim) if d not in (i, j))
+            cell_volume = np.prod([widths[d] for d in other_axes])
+
+            for p in values:
+                marginal = p.sum(axis=other_axes) * cell_volume
+                finite = marginal[np.isfinite(marginal)]
+                if finite.size == 0:
+                    raise ValueError("A density plane has no finite values.")
+                maxima[i, j] = max(maxima.get((i, j), 0.0), float(finite.max()))
+
+    if per_pair:
+        return {
+            pair: np.linspace(0.0, vmax if vmax > 0 else 1.0, n_levels)
+            for pair, vmax in maxima.items()
+        }
+
+    vmax = max(maxima.values())
+    return np.linspace(0.0, vmax if vmax > 0 else 1.0, n_levels)
+
+
 def plot_excitation_feature_grid(
     result,
     *,
@@ -15,6 +62,7 @@ def plot_excitation_feature_grid(
     labels=None,
     fig=None,
     axs=None,
+    levels=None,
 ):
     """Use the existing full feature grids for one excitation run."""
     if view == "samples":
@@ -38,7 +86,8 @@ def plot_excitation_feature_grid(
     elif view != "achieved":
         raise ValueError("view must be 'samples', 'target', or 'achieved'")
 
-    fig, _ = density.visualize(labels=labels, fig=fig, axs=axs)
+    density_axes = axs[1, 0] if axs is not None and density.dim == 2 else axs
+    fig, _ = density.visualize(labels=labels, fig=fig, axs=density_axes, levels=levels)
     return fig
 
 
@@ -49,7 +98,9 @@ def compare_excitation_feature_grids(
     labels=None,
     rows_per_figure=12,
     title=None,
+    levels=None,
 ):
+    """Compare feature planes with optional shared contour boundaries."""
     if not runs:
         raise ValueError("No runs selected.")
     if view not in {"samples", "target", "achieved"}:
@@ -95,6 +146,7 @@ def compare_excitation_feature_grids(
                 labels=labels,
                 fig=fig,
                 axs=grid,
+                levels=levels,
             )
 
             axes[0, column].set_title(objective.replace("dmpe_", "").replace("_", " "))
