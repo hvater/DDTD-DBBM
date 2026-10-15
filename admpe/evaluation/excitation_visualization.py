@@ -8,35 +8,28 @@ from dmpe.evaluation.plotting_utils import plot_feature_combinations
 from dmpe.utils.density_estimation import DensityEstimate
 
 
-def shared_density_levels(runs, *, n_levels=21, include_targets=False, per_pair=False):
-    """Find common contour boundaries across all feature planes and objectives.
+def shared_density_levels(runs, *, view="achieved", n_levels=21, per_pair=False):
 
-    Uses the default marginal integration from DensityEstimate.visualize.
-    Include target distributions when comparing target and achieved densities.
-    With per_pair=True, return a dictionary keyed by (i, j), with i < j, so each
-    comparison row has its own scale shared across objectives.
-    """
     if not runs or n_levels < 2:
         raise ValueError("Select runs and request at least two levels.")
+    if view not in {"achieved", "target", "both"}:
+        raise ValueError("view must be 'achieved', 'target', or 'both'.")
 
     maxima = {}
     for run in runs.values():
         density = run["estimator"]
-        density = DensityEstimate.from_estimate(
-            p=density.p / density.p.sum(),
-            n_additional_observations=0,
-            density_estimate=density,
-        )
-
         if density.dim < 2:
             raise ValueError("Contour plots require at least two features.")
 
-        achieved = np.asarray(density.p_unflattened)
-        values = [achieved]
-        if include_targets:
+        values = []
+        if view in {"achieved", "both"}:
+            values.append(np.asarray(density.p_unflattened))
+
+        if view in {"target", "both"}:
             target = run["metadata"]["params"]["alg_params"]["target_distribution"]
-            target = np.asarray(target).reshape(achieved.shape)
-            values.append(target / target.sum())
+            values.append(np.asarray(target).reshape(density.unflattened_shape))
+
+        values = [p / p.sum() for p in values]
 
         for i, j in combinations(range(density.dim), 2):
             other_axes = tuple(d for d in range(density.dim) if d not in (i, j))
@@ -48,11 +41,13 @@ def shared_density_levels(runs, *, n_levels=21, include_targets=False, per_pair=
                     raise ValueError("A density plane has no finite values.")
                 maxima[i, j] = max(maxima.get((i, j), 0.0), float(finite.max()))
 
-    if per_pair:
-        return {pair: np.linspace(0.0, vmax if vmax > 0 else 1.0, n_levels) for pair, vmax in maxima.items()}
+    def make_levels(vmax):
+        return np.linspace(0.0, vmax if vmax > 0 else 1.0, n_levels)
 
-    vmax = max(maxima.values())
-    return np.linspace(0.0, vmax if vmax > 0 else 1.0, n_levels)
+    if per_pair:
+        return {pair: make_levels(vmax) for pair, vmax in maxima.items()}
+
+    return make_levels(max(maxima.values()))
 
 
 def plot_excitation_feature_grid(
