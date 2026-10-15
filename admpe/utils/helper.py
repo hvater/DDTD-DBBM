@@ -22,3 +22,57 @@ def pprint_helper(x):
         convert_lists(x),
         width=120,
     )
+
+
+def get_plot_labels(system_name: str) -> dict[str, list[str]]:
+    definitions = {
+        "cart_pole": (
+            (
+                r"Cart position $\tilde{x}$",
+                r"Cart velocity $\tilde{v}$",
+                r"Pole angle $\tilde{\theta}$",
+                r"Angular velocity $\tilde{\omega}$",
+            ),
+            (r"Force $\tilde{F}$",),
+        ),
+        "pendulum": (
+            (
+                r"Angle $\tilde{\theta}$",
+                r"Angular velocity $\tilde{\omega}$",
+            ),
+            (r"Torque $\tilde{T}$",),
+        ),
+        "fluid_tank": (
+            (r"Water level $\tilde{h}$",),
+            (r"Inflow $\tilde{q}_{\mathrm{in}}$",),
+        ),
+    }
+
+    if system_name not in definitions:
+        raise ValueError(f"Unknown system {system_name!r}. " f"Choose from {tuple(definitions)}.")
+
+    observations, actions = map(list, definitions[system_name])
+
+    # Model time-series plots use the existing sin/cos featurization.
+    if system_name == "cart_pole":
+        featurized = [
+            *observations[:2],
+            r"$\sin(\theta)$",
+            r"$\cos(\theta)$",
+            observations[3],
+        ]
+    elif system_name == "pendulum":
+        featurized = [
+            r"$\sin(\theta)$",
+            r"$\cos(\theta)$",
+            observations[1],
+        ]
+    else:
+        featurized = observations.copy()
+
+    return {
+        "observations": observations,
+        "actions": actions,
+        "both": observations + actions,
+        "featurized_observations": featurized,
+    }
