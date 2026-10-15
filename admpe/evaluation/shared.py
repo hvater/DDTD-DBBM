@@ -130,8 +130,6 @@ def visualize_rollout_on_density(
         ]
     )
 
-    fig.legend(handles=handles, loc="upper center", ncol=4)
-    fig.subplots_adjust(top=0.93)
-    # fig.legend(handles, legend_labels, loc="upper center", ncol=2)
+    fig.legend(handles=handles, loc="lower center", ncol=4, bbox_to_anchor=(0.5, -0.05))
     fig.subplots_adjust(top=0.93)
     return fig, axes
