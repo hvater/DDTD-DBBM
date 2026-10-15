@@ -10,7 +10,13 @@ from admpe.evaluation.model_wrapping import EnvWrapper, ModelWrapper
 from admpe.evaluation.modeling_evaluation import model_prediction
 
 
-def visualize_model_metric_boxplots(df, *, log_scale: bool = False, figure_width: float = 6.0):
+def visualize_model_metric_boxplots(
+    df,
+    *,
+    log_scale: bool = False,
+    figure_width: float = 6.0,
+    hide_outliers: bool = False,
+):
     """Plot RMSE, MAE and WCE by model and excitation objective for each system.
 
     Each box contains the finite metric values from individual modeling runs.
@@ -65,6 +71,7 @@ def visualize_model_metric_boxplots(df, *, log_scale: bool = False, figure_width
                             capprops={"color": color},
                             medianprops={"color": "black", "linewidth": 1.5},
                             flierprops={"marker": ".", "markeredgecolor": color, "alpha": 0.6},
+                            showfliers=not hide_outliers,
                         )
                     ax.text(
                         position,
@@ -112,6 +119,7 @@ def visualize_model_prediction_metric_boxplots(
     *,
     log_scale: bool = False,
     figure_width: float = 6.0,
+    hide_outliers: bool = False,
 ):
     """Return {system_name: (figure, axes)} for prediction errors."""
     metadata = ["system_name", "model_type", "excitation_objective"]
@@ -129,6 +137,7 @@ def visualize_model_prediction_metric_boxplots(
         plot_df,
         log_scale=log_scale,
         figure_width=figure_width,
+        hide_outliers=hide_outliers,
     )
 
 
@@ -187,6 +196,7 @@ def visualize_model_rollout_metric_boxplots(
     signals: list[str] | None = None,
     log_scale: bool = False,
     figure_width: float = 6.0,
+    hide_outliers: bool = False,
 ):
     """Return {(system_name, signal): (figure, axes)} for rollout errors.
 
@@ -223,6 +233,7 @@ def visualize_model_rollout_metric_boxplots(
             plot_df,
             log_scale=log_scale,
             figure_width=figure_width,
+            hide_outliers=hide_outliers,
         )
 
         for system_name, (fig, axes) in signal_figures.items():
