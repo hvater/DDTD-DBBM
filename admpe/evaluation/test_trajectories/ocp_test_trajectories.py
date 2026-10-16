@@ -1,5 +1,6 @@
 from typing import Callable
 
+
 import jax
 import jax.numpy as jnp
 import optax
@@ -8,6 +9,14 @@ import jax_tqdm
 
 import exciting_environments as excenvs
 from dmpe.models.model_utils import simulate_ahead_with_env
+
+from admpe.data_management import TESTING_TRAJECTORIES_ROOT
+
+
+OCP_TESTING_SIGNALS_ROOT = TESTING_TRAJECTORIES_ROOT / "ocp"
+OCP_TESTING_SIGNALS_ROOT.mkdir(parents=True, exist_ok=True)
+
+SUPPORTED_SIGNALS = ["ocp"]
 
 
 def generate_initial_actions(action_key, n_starts, n_steps, action_dim):
@@ -110,8 +119,8 @@ def get_candidate_batch_function(
     loss_function,
     penalty_function,
     data_key,
-    state_tolerance=1e-2,
-    action_tolerance=1e-2,
+    state_tolerance=1e-3,
+    action_tolerance=1e-3,
 ):
 
     n_steps = params["n_steps"]
