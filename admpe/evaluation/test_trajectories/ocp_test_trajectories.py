@@ -18,6 +18,16 @@ OCP_TESTING_SIGNALS_ROOT.mkdir(parents=True, exist_ok=True)
 
 SUPPORTED_SIGNALS = ["ocp"]
 
+OCP_DEFAULTS = dict(
+    n_starts=4,
+    n_opt_steps=500,
+    state_tolerance=1e-3,
+    action_tolerance=1e-3,
+    lr_init=1e-1,
+    lr_decay_rate=0.1,
+    lr_end=1e-4,
+)
+
 
 def generate_initial_actions(action_key, n_starts, n_steps, action_dim):
     return jax.random.uniform(
