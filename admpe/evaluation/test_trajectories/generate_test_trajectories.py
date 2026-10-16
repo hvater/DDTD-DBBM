@@ -52,7 +52,6 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--noise_variance", type=float, default=None)
     parser.add_argument("--max_attempts", type=int, default=None, help="Optional candidate cap per seed.")
     parser.add_argument("--output_root", type=Path, default=TESTING_TRAJECTORIES_ROOT)
-    parser.add_argument("--continue_on_error", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -87,20 +86,6 @@ def setup_experiment(
         signal_params = dict(simple.SIGNALS[signal_name][1])
         signal_params.update(signal_overrides or {})
 
-    if signal_name == "ocp":
-        overrides = ocp_overrides or {}
-        unknown = set(overrides) - set(ocp.OCP_DEFAULTS)
-        if unknown:
-            raise ValueError(f"Unknown OCP parameters: {sorted(unknown)}")
-
-        params.update({**ocp.OCP_DEFAULTS, **overrides})
-
-        if params["n_starts"] < 1 or params["n_opt_steps"] < 1:
-            raise ValueError("OCP starts and optimization steps must be positive.")
-
-        if env.process_noise_variance != 0.0:
-            raise ValueError("The current OCP loss requires a noiseless environment.")
-
     # TODO: is this consistent with the excitation experiments?
     n_steps = n_time_steps - 1
     params = dict(
@@ -118,6 +103,21 @@ def setup_experiment(
         env_params=env_params,
         environment_properties=env.env_properties,
     )
+
+    if signal_name == "ocp":
+        overrides = ocp_overrides or {}
+        unknown = set(overrides) - set(ocp.OCP_DEFAULTS)
+        if unknown:
+            raise ValueError(f"Unknown OCP parameters: {sorted(unknown)}")
+
+        params.update({**ocp.OCP_DEFAULTS, **overrides})
+
+        if params["n_starts"] < 1 or params["n_opt_steps"] < 1:
+            raise ValueError("OCP starts and optimization steps must be positive.")
+
+        if env.process_noise_variance != 0.0:
+            raise ValueError("The current OCP loss requires a noiseless environment.")
+
     # Candidate keys depend on the signal family and candidate ID, not batch size.
     data_key = jax.random.fold_in(jax.random.PRNGKey(seed), zlib.crc32(signal_name.encode()))
     return env, params, penalty_function, featurize, data_key
@@ -194,7 +194,7 @@ def get_candidate_batch_function(
 
         return batch
     else:
-        raise ValueError(f"The signal type '{params["signal"]}' is unknown.")
+        raise ValueError(f"The signal type '{params["signal_name"]}' is unknown.")
 
 
 def generate_testing_dataset(
@@ -221,6 +221,14 @@ def generate_testing_dataset(
     if final_path.exists():
         raise FileExistsError(f"Dataset already exists: {final_path}")
     working_path.mkdir(exist_ok=False)
+
+    if signal_name in ocp.SUPPORTED_SIGNALS:
+        constraint_text = (
+            "finite observations/actions/penalties and excess observations/actions <= respective tolerance"
+        )
+    else:
+        constraint_text = "finite observations/actions/penalties and penalty_function <= 0"
+
     metadata = dict(
         exp_id=exp_id,
         seed=seed,
@@ -234,8 +242,9 @@ def generate_testing_dataset(
         attempted=0,
         feasible_candidates=0,
         saved_sequences=0,
-        constraint="finite observations/actions/penalties and penalty_function <= 0",
+        constraint=constraint_text,
     )
+
     write_metadata(working_path / "experiment.json", metadata)
     started = perf_counter()
     try:
@@ -347,6 +356,29 @@ def run_testing_dataset_experiment(
     max_attempts: int | None = int(1e6),
     signal_overrides=None,
 ) -> Path:
+
+    if system_name not in SUPPORTED_SYSTEMS:
+        raise ValueError(f"Unknown system: {system_name}")
+
+    if signal_name not in SUPPORTED_SIGNALS:
+        raise ValueError(f"Unknown signal: {signal_name}")
+
+    for name, value, minimum in (
+        ("n_sequences", n_sequences, 1),
+        ("batch_size", batch_size, 1),
+        ("n_time_steps", n_time_steps, 2),
+    ):
+        if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or value < minimum:
+            raise ValueError(f"{name} must be an integer >= {minimum}.")
+
+    if max_attempts is not None:
+        if (
+            isinstance(max_attempts, bool)
+            or not isinstance(max_attempts, (int, np.integer))
+            or not 1 <= max_attempts <= 2**32
+        ):
+            raise ValueError("max_attempts must be an integer in [1, 2**32], or None.")
+
     if gpu_id < -1:
         raise ValueError("gpu_id must be -1 for CPU or a nonnegative GPU index.")
     if exp_name is not None and not re.fullmatch(r"[A-Za-z0-9_.-]+", exp_name):
@@ -420,3 +452,7 @@ def combine_sequences(path: Path, n_sequences: int) -> Path:
         source_file.unlink()
 
     return destination
+
+
+if __name__ == "__main__":
+    run_testing_dataset_experiment(**vars(parse_args()))

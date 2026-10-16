@@ -55,7 +55,7 @@ def get_candidate_batch_function(env, params, penalty_function, data_key):
         initial_observation = env.generate_observation(initial_state)
         observations, _ = simulate_ahead_with_env(env, initial_observation, initial_state, actions)
 
-        trajectory_penalties = penalty_function(x=observations[:-1], u=actions)
+        trajectory_penalties = penalty_function(x=observations, u=actions)
         finite = (
             jnp.all(jnp.isfinite(observations))
             & jnp.all(jnp.isfinite(actions))

@@ -1,4 +1,4 @@
-from admpe.evaluation.test_trajectories.simple_test_trajectories import (
+from admpe.evaluation.test_trajectories.generate_test_trajectories import (
     SUPPORTED_SYSTEMS,
     SUPPORTED_SIGNALS,
     run_testing_dataset_experiment,
