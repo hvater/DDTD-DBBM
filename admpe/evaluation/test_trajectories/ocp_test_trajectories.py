@@ -134,8 +134,8 @@ def get_candidate_batch_function(
 ):
 
     n_steps = params["n_steps"]
-    n_starts = params["n_starts"]
-    n_opt_steps = params["n_opt_steps"]
+    n_starts = params["signal_params"]["n_starts"]
+    n_opt_steps = params["signal_params"]["n_opt_steps"]
 
     def generate_candidate(candidate_id):
         key = jax.random.fold_in(data_key, candidate_id)

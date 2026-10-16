@@ -81,7 +81,17 @@ def setup_experiment(
     env_params["process_noise_variance"] = float(env.process_noise_variance)
 
     if signal_name == "ocp":
-        signal_params = {}
+        signal_params = ocp.OCP_DEFAULTS
+        # unknown = set(ocp_overrides) - set(ocp.OCP_DEFAULTS)
+        # if unknown:
+        #     raise ValueError(f"Unknown OCP parameters: {sorted(unknown)}")
+        # signal_params.update(overrides=ocp_overrides or {})
+        if signal_params["n_starts"] < 1 or signal_params["n_opt_steps"] < 1:
+            raise ValueError("OCP starts and optimization steps must be positive.")
+
+        if env.process_noise_variance != 0.0:
+            raise ValueError("The current OCP loss requires a noiseless environment.")
+
     else:
         signal_params = dict(simple.SIGNALS[signal_name][1])
         signal_params.update(signal_overrides or {})
@@ -103,20 +113,6 @@ def setup_experiment(
         env_params=env_params,
         environment_properties=env.env_properties,
     )
-
-    if signal_name == "ocp":
-        overrides = ocp_overrides or {}
-        unknown = set(overrides) - set(ocp.OCP_DEFAULTS)
-        if unknown:
-            raise ValueError(f"Unknown OCP parameters: {sorted(unknown)}")
-
-        params.update({**ocp.OCP_DEFAULTS, **overrides})
-
-        if params["n_starts"] < 1 or params["n_opt_steps"] < 1:
-            raise ValueError("OCP starts and optimization steps must be positive.")
-
-        if env.process_noise_variance != 0.0:
-            raise ValueError("The current OCP loss requires a noiseless environment.")
 
     # Candidate keys depend on the signal family and candidate ID, not batch size.
     data_key = jax.random.fold_in(jax.random.PRNGKey(seed), zlib.crc32(signal_name.encode()))
@@ -153,11 +149,11 @@ def get_candidate_batch_function(
 
     elif params["signal_name"] in ocp.SUPPORTED_SIGNALS:
         learning_rate = optax.schedules.exponential_decay(
-            init_value=params["lr_init"],
-            transition_steps=max(1, params["n_opt_steps"] // 3),
+            init_value=params["signal_params"]["lr_init"],
+            transition_steps=max(1, params["signal_params"]["n_opt_steps"] // 3),
             transition_begin=0,
-            decay_rate=params["lr_decay_rate"],
-            end_value=params["lr_end"],
+            decay_rate=params["signal_params"]["lr_decay_rate"],
+            end_value=params["signal_params"]["lr_end"],
         )
         optimizer = optax.adam(learning_rate)
 
@@ -169,8 +165,8 @@ def get_candidate_batch_function(
             ocp.loss_function,
             penalty_function,
             data_key,
-            state_tolerance=params["state_tolerance"],
-            action_tolerance=params["action_tolerance"],
+            state_tolerance=params["signal_params"]["state_tolerance"],
+            action_tolerance=params["signal_params"]["action_tolerance"],
         )
 
         def batch(candidate_ids):
@@ -261,6 +257,27 @@ def generate_testing_dataset(
             max_attempts,
             signal_overrides=signal_overrides,
         )
+        metadata.update(
+            signal_params=dict(params["signal_params"]),
+            n_steps=params["n_steps"],
+            batch_size=params["batch_size"],
+            max_attempts=params["max_attempts"],
+            amplitude=params["amplitude"],
+            deterministic_initial_state=params["deterministic_initial_state"],
+            tau=params["tau"],
+            env_params=params["env_params"],
+            environment_properties=params["environment_properties"],
+        )
+
+        if signal_name == "ocp":
+            metadata.update(
+                optimizer="adam",
+                learning_rate_schedule="exponential_decay",
+                loss="mean_squared_feature_distance",
+                penalty_weight=1e3,
+            )
+
+        write_metadata(working_path / "experiment.json", metadata)
 
         batch_candidate_function = get_candidate_batch_function(
             env,
