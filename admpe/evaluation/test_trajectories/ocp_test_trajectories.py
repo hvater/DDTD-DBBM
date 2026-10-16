@@ -57,7 +57,7 @@ def optimize_actions(
 ):
     opt_state = optimizer.init(proposed_actions)
 
-    @jax_tqdm.loop_tqdm(n_opt_steps, print_rate=min(100, proposed_actions.shape[0]))
+    @jax_tqdm.loop_tqdm(n_opt_steps, print_rate=min(10, proposed_actions.shape[0]))
     def body_fun(i, carry):
         proposed_actions, opt_state = carry
         grad = gradient_function(
@@ -102,7 +102,17 @@ def optimize_actions_multistart(
     return actions[best_idx], losses[best_idx]
 
 
-def get_candidate_batch_function(env, params, optimizer, featurize, loss_function, penalty_function, data_key):
+def get_candidate_batch_function(
+    env,
+    params,
+    optimizer,
+    featurize,
+    loss_function,
+    penalty_function,
+    data_key,
+    state_tolerance=1e-2,
+    action_tolerance=1e-2,
+):
 
     n_steps = params["n_steps"]
     n_starts = params["n_starts"]
@@ -135,14 +145,18 @@ def get_candidate_batch_function(env, params, optimizer, featurize, loss_functio
 
         observations, _ = simulate_ahead_with_env(env, initial_observation, initial_state, chosen_actions)
 
-        trajectory_penalties = penalty_function(x=observations[:-1], u=chosen_actions)
+        state_excess = jnp.max(jax.nn.relu(jnp.abs(observations) - 1))
+        action_excess = jnp.max(jax.nn.relu(jnp.abs(chosen_actions) - 1))
+
         finite = (
             jnp.all(jnp.isfinite(observations))
             & jnp.all(jnp.isfinite(chosen_actions))
-            & jnp.all(jnp.isfinite(trajectory_penalties))
+            & jnp.all(jnp.isfinite(state_excess))
+            & jnp.all(jnp.isfinite(action_excess))
         )
 
-        valid = finite & (jnp.all(trajectory_penalties <= 0.0))
-        return observations, chosen_actions, trajectory_penalties, valid, proposed_actions, target_observation
+        valid = finite & (state_excess <= state_tolerance) & (action_excess <= action_tolerance)
+
+        return observations, chosen_actions, state_excess, action_excess, valid, proposed_actions, target_observation
 
     return jax.jit(jax.vmap(generate_candidate))
