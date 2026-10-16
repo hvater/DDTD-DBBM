@@ -20,7 +20,7 @@ SUPPORTED_SIGNALS = ["ocp"]
 
 OCP_DEFAULTS = dict(
     n_starts=4,
-    n_opt_steps=500,
+    n_opt_steps=5_000,
     state_tolerance=1e-3,
     action_tolerance=1e-3,
     lr_init=1e-1,
@@ -57,7 +57,9 @@ def loss_function(
 ):
     init_state = env.generate_state_from_observation(init_obs)
     observations, _ = simulate_ahead_with_env(env, init_obs, init_state, actions)
-    loss = jnp.mean((featurize(observations) - featurize(target[None])) ** 2)
+    sq_distances = jnp.sum((featurize(observations) - featurize(target[None])) ** 2, axis=-1)
+    loss = jnp.min(sq_distances)
+    # loss = jnp.sum((featurize(observations[-1, :]) - featurize(target)) ** 2)
     penalties = penalty_function(observations, actions) * 1e3
     return loss + penalties
 

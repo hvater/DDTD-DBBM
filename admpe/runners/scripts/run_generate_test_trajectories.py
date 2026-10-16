@@ -28,7 +28,7 @@ for system_name in SUPPORTED_SYSTEMS:
         use_f64=False,
         gpu_id=2,
         n_sequences=500,
-        n_time_steps=100 if system_name == "cart_pole" else 500,
+        n_time_steps=500,  # 100 if system_name == "cart_pole" else 500,
         batch_size=1024,
         noise_variance=0.0,
         max_attempts=int(1e6),
