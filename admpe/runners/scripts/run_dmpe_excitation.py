@@ -11,6 +11,7 @@ if __name__ == "__main__":
                 system_name=system_name,
                 excitation_objective=excitation_objective,
                 gpu_id=2,
-                exp_name="noise_1_e_minus_6",
+                exp_name="state_only_run1",
                 seeds=np.arange(0, 10, 1).tolist(),
+                alg_overrides={"consider_action_distribution": False},
             )

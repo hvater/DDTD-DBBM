@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 
 from dmpe.models.models import NeuralEulerODE, NeuralEulerODECartpole, NeuralEulerODEPendulum
-from dmpe.utils.density_estimation import build_grid, DensityEstimate
+from dmpe.utils.density_estimation import build_grid, DensityEstimate, get_uniform_target_distribution
 from dmpe.utils.signals import aprbs
 from dmpe.utils.env_utils.cart_pole_utils import setup_env as setup_cart_pole
 from dmpe.utils.env_utils.fluid_tank_utils import setup_env as setup_fluid_tank
@@ -61,6 +61,89 @@ def apply_overrides(defaults, overrides):
     return resolved
 
 
+def construct_target_distribution(
+    alg_params,
+    env,
+    excitation_objective,
+    penalty_function,
+):
+    """Constructs target distribution p^* based of the given parameterization.
+
+    The state-action joint distribution is constructed and then the actions are marginalized if only
+    states are to be considered.
+    """
+
+    assert alg_params["target_distribution"] is None
+
+    # construct full state-action distribution
+    obs_dim = env.obs_dim
+    act_dim = env.action_dim
+
+    uniform_distribution = get_uniform_target_distribution(
+        dim=obs_dim + act_dim,
+        points_per_dim=alg_params["points_per_dim"],
+        bandwidth=alg_params["bandwidth"],
+        grid_extend=alg_params["grid_extend"],
+        consider_action_distribution=True,
+        penalty_function=alg_params["penalty_function"],
+        act_dim=act_dim,
+        obs_dim=obs_dim,
+    )
+
+    if excitation_objective == "dmpe_uniform":
+        target_distribution = uniform_distribution
+
+    elif excitation_objective == "dmpe_static_dynamics":
+        vf = DynamicsVectorField.from_env(
+            env,
+            alg_params["points_per_dim"],
+            low=-alg_params["grid_extend"],
+            high=alg_params["grid_extend"],
+        )
+        target = TargetDensity.from_vector_field(
+            vf=vf,
+            bandwidth=alg_params["bandwidth"],
+            penalty_function=penalty_function,
+            consider_action_distribution=True,
+            obs_dim=env.obs_dim,
+            act_dim=env.action_dim,
+        )
+        target_distribution = target.p[0]
+
+    elif excitation_objective == "dmpe_static_mixture_dynamics":
+        vf = DynamicsVectorField.from_env(
+            env,
+            alg_params["points_per_dim"],
+            low=-alg_params["grid_extend"],
+            high=alg_params["grid_extend"],
+        )
+        target = TargetDensity.from_vector_field(
+            vf=vf,
+            bandwidth=alg_params["bandwidth"],
+            penalty_function=penalty_function,
+            consider_action_distribution=True,
+            obs_dim=env.obs_dim,
+            act_dim=env.action_dim,
+        )
+        target_distribution = (target.p[0] + uniform_distribution) / 2
+    elif excitation_objective == "dmpe_static_curv":
+        raise NotImplementedError()
+
+    if not alg_params["consider_action_distribution"]:
+
+        # marginalize actions for the state-only case
+        # first change shape to (points_per_dim, points_per_dim, ..., points_per_dim)
+        target_distribution = target_distribution.reshape(
+            (alg_params["points_per_dim"],) * (obs_dim + act_dim),
+        )
+        # then sum over all dimensions that belong to action dimensions
+        target_distribution = target_distribution.sum(
+            axis=tuple(range(obs_dim, obs_dim + act_dim)),
+        ).reshape(-1, 1)
+
+    return target_distribution
+
+
 def setup_algorithm_parameterization(
     seed,
     system_name,
@@ -82,9 +165,12 @@ def setup_algorithm_parameterization(
         system_name, model_type, excitation_objective
     )
 
-    # TODO: apply overrides cannot redo, e.g., the target distribution?
-    # The order should be: define defaults, allow overrides, compute targets and trainer etc.
     alg_params = apply_overrides(alg_params, alg_overrides)
+
+    # overwrite model_trainer_params to reflect overwrites in alg_params
+    model_trainer_params["start_learning"] = alg_params["n_prediction_steps"]
+    model_trainer_params["sequence_length"] = alg_params["n_prediction_steps"]
+
     model_trainer_params = apply_overrides(model_trainer_params, model_trainer_overrides)
     model_params = apply_overrides(model_params, model_overrides)
 
@@ -120,40 +206,13 @@ def setup_algorithm_parameterization(
         params["model_params"] = None
         params["model_trainer_params"] = None
 
-    if excitation_objective == "dmpe_static_dynamics":
-        vf = DynamicsVectorField.from_env(
+    if excitation_objective.startswith("dmpe_"):
+        alg_params["target_distribution"] = construct_target_distribution(
+            alg_params,
             env,
-            alg_params["points_per_dim"],
-            low=-alg_params["grid_extend"],
-            high=alg_params["grid_extend"],
+            excitation_objective,
+            penalty_function,
         )
-        target = TargetDensity.from_vector_field(
-            vf=vf,
-            bandwidth=alg_params["bandwidth"],
-            penalty_function=penalty_function,
-            consider_action_distribution=alg_params["consider_action_distribution"],
-            obs_dim=env.obs_dim,
-            act_dim=env.action_dim,
-        )
-        alg_params["target_distribution"] = target.p[0]
-
-    elif excitation_objective == "dmpe_static_mixture_dynamics":
-        uniform_distribution = alg_params["target_distribution"]
-        vf = DynamicsVectorField.from_env(
-            env,
-            alg_params["points_per_dim"],
-            low=-alg_params["grid_extend"],
-            high=alg_params["grid_extend"],
-        )
-        target = TargetDensity.from_vector_field(
-            vf=vf,
-            bandwidth=alg_params["bandwidth"],
-            penalty_function=penalty_function,
-            consider_action_distribution=alg_params["consider_action_distribution"],
-            obs_dim=env.obs_dim,
-            act_dim=env.action_dim,
-        )
-        alg_params["target_distribution"] = (target.p[0] + uniform_distribution) / 2
 
     elif excitation_objective.startswith("gp_"):
         alg_params["loss_type"] = excitation_objective.removeprefix("gp_")
