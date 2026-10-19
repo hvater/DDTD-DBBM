@@ -14,7 +14,7 @@ from dmpe.utils.env_utils.pendulum_utils import setup_env as setup_pendulum
 
 from admpe.excitation.gp_excitation.gp_model import GPModel, update_gp_dataset
 from admpe.adaptive_densities import TargetDensity
-from admpe.vector_fields import DynamicsVectorField
+from admpe.vector_fields import DynamicsVectorField, LolaVectorField
 from admpe.excitation.excitation_parameterization import fetch_parameterization
 
 SUPPORTED_SYSTEMS = ("fluid_tank", "pendulum", "cart_pole")
@@ -127,7 +127,33 @@ def construct_target_distribution(
         )
         target_distribution = (target.p[0] + uniform_distribution) / 2
     elif excitation_objective == "dmpe_static_curv":
+        vf = None  # implement curvature based vector field
+        target = TargetDensity.from_vector_field(
+            vf=vf,
+            bandwidth=alg_params["bandwidth"],
+            penalty_function=penalty_function,
+            consider_action_distribution=True,
+            obs_dim=env.obs_dim,
+            act_dim=env.action_dim,
+        )
         raise NotImplementedError()
+
+    elif excitation_objective.starts_with("dmpe_static_LOLA_"):
+        if excitation_objective == "dmpe_static_LOLA_analytical":
+            lola_vf = LolaVectorField.from_env(env, 50, -1.05, 1.05, analytical_jac=True)
+        elif excitation_objective == "dmpe_static_LOLA_ls":
+            lola_vf = LolaVectorField.from_env(env, 50, -1.05, 1.05, analytical_jac=False)
+
+        lola_target = TargetDensity.from_vector_field(
+            vf=lola_vf,
+            bandwidth=0.1,
+            penalty_function=penalty_function,
+            consider_action_distribution=True,
+            obs_dim=env.obs_dim,
+            act_dim=env.action_dim,
+        )
+        # mix lola_target with uniform distribution to ensure general coverage
+        target_distribution = (lola_target.p[0] + uniform_distribution) / 2
 
     if not alg_params["consider_action_distribution"]:
 

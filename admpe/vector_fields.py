@@ -233,29 +233,133 @@ class DynamicsVectorField(VectorField):
         )
 
     @classmethod
-    def from_model(cls, model, low, high, points_per_dim):
+    def from_model(cls, model, points_per_dim, low, high, *, use_discrete_dynamics: bool = False):
         raise NotImplementedError()
 
 
 class CurvatureVectorField(VectorField):
 
     @classmethod
-    def from_env(cls, env, low, high, points_per_dim):
+    def from_env(cls, env, points_per_dim, low, high, *, use_discrete_dynamics: bool = False):
         pass
 
     @classmethod
-    def from_model(cls, model, low, high, points_per_dim):
+    def from_model(cls, model, points_per_dim, low, high, *, use_discrete_dynamics: bool = False):
         raise NotImplementedError()
+
+
+def get_full_neighbours(radius, dim):
+    basis = jnp.eye(dim)
+    i, j = jnp.triu_indices(dim, k=1)
+
+    diagonals = jnp.concatenate(
+        [
+            basis[i] + basis[j],
+            basis[i] - basis[j],
+        ]
+    ) / jnp.sqrt(2.0)
+
+    directions = jnp.concatenate([basis, diagonals])
+    offsets = radius * jnp.concatenate([directions, -directions])
+    return offsets
 
 
 class LolaVectorField(VectorField):
-    @classmethod
-    def from_env(cls, env, low, high, points_per_dim):
-        pass
+    """Measures the nonlinearity of the system dynamics based on the local linear approximation (LOLA) technique
+    proposed in:
+
+    ```
+    @article{Crombecq2011,
+        author = {Crombecq, Karel and Gorissen, Dirk and Deschrijver, Dirk and Dhaene, Tom},
+        title = {A Novel Hybrid Sequential Design Strategy for Global Surrogate Modeling of Computer Experiments},
+        journal = {SIAM Journal on Scientific Computing},
+        volume = {33},
+        number = {4},
+        pages = {1948-1974},
+        year = {2011},
+        doi = {10.1137/090761811},
+    }
+    ```
+
+    NOTE: The constructed field is a scalar field and not a vector field. However, it runs fine within this framework.
+    Will likely be changed in the future.
+    """
+
+    @staticmethod
+    def evaluate_nonlinearity(z, discrete_dynamics, offsets, env, analytical_jac: bool = True):
+        dynamics = lambda z: discrete_dynamics(z[: env.physical_state_dim], z[env.physical_state_dim :])
+
+        center = dynamics(z)
+        neighbors = jax.vmap(dynamics)(z[None, :] + offsets)
+        differences = neighbors - center
+        if analytical_jac:
+            jacobian = jax.jacrev(dynamics)(z)
+            slopes = jacobian.T
+        else:
+            slopes = jnp.linalg.lstsq(offsets, differences, rcond=None)[0]
+
+        lola_residuals = differences - offsets @ slopes
+        score = jnp.mean(jnp.linalg.norm(lola_residuals, axis=-1))
+        return jnp.atleast_1d(score)
 
     @classmethod
-    def from_model(cls, model, low, high, points_per_dim):
+    def from_env(
+        cls,
+        env,
+        points_per_dim,
+        low,
+        high,
+        *,
+        use_discrete_dynamics: bool = True,
+        analytical_jac: bool = True,
+        full_neighbours: bool = False,
+        radius: float = 0.05,
+    ):
+
+        dim = env.physical_state_dim + env.action_dim
+
+        z = build_grid(dim, low=low, high=high, points_per_dim=points_per_dim)
+
+        if use_discrete_dynamics:
+            ode = None
+            discrete_dynamics = make_normalized_discrete_dynamics(env)
+
+            if full_neighbours:
+                offsets = get_full_neighbours(radius, dim)
+            else:
+                # only computes neighbours on the full axes
+                offsets = radius * jnp.concatenate([jnp.eye(dim), -jnp.eye(dim)], axis=0)
+
+            evaluate = partial(
+                cls.evaluate_nonlinearity,
+                discrete_dynamics=discrete_dynamics,
+                offsets=offsets,
+                env=env,
+                analytical_jac=analytical_jac,
+            )
+        else:
+            raise NotImplementedError()
+
+        values = eqx.filter_vmap(evaluate, in_axes=(0))(z)
+
+        physical_labels = [f.name for f in dataclasses.fields(env.PhysicalState)]
+        action_labels = [f.name for f in dataclasses.fields(env.Action)]
+
+        assert ode is not None or discrete_dynamics is not None
+
+        return cls(
+            values=values,
+            z=z,
+            _points_per_dim=points_per_dim,
+            _ode=ode,
+            _discrete_dynamics=discrete_dynamics,
+            _labels_z=physical_labels + action_labels,
+            _labels_values=physical_labels,
+        )
+
+    @classmethod
+    def from_model(cls, model, points_per_dim, low, high, *, use_discrete_dynamics: bool = False):
         raise NotImplementedError()
 
-    def from_data(cls, data, low, high, points_per_dim):
+    def from_data(cls, data, points_per_dim, low, high, *, use_discrete_dynamics: bool = False):
         raise NotImplementedError()
