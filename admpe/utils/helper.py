@@ -83,7 +83,7 @@ def get_plot_labels(system_name: str) -> dict[str, list[str]]:
 
 def get_state_difference_for_env(env):
     if isinstance(env, excenvs.FluidTank):
-        return jnp.substract
+        return jnp.subtract
     elif isinstance(env, excenvs.Pendulum):
 
         def norm_pendulum_difference(next_state, state):
@@ -96,7 +96,7 @@ def get_state_difference_for_env(env):
 
         def norm_cart_pole_difference(next_state, state):
             delta = next_state - state
-            return delta.at[2].set((delta[0] + 1.0) % 2.0 - 1.0)
+            return delta.at[2].set((delta[2] + 1.0) % 2.0 - 1.0)
 
         return norm_cart_pole_difference
     else:
