@@ -10,38 +10,7 @@ import equinox as eqx
 import exciting_environments as excenvs
 from dmpe.utils.density_estimation import build_grid
 
-
-def normalized_ode(
-    norm_state,
-    norm_action,
-    ode,
-    params,
-    physical_normalizations,
-    action_normalizations,
-):
-
-    state_fields = [f.name for f in dataclasses.fields(physical_normalizations)]
-    action_fields = [f.name for f in dataclasses.fields(action_normalizations)]
-    state = jnp.stack(
-        [getattr(physical_normalizations, f).denormalize(norm_state[i]) for i, f, in enumerate(state_fields)], axis=-1
-    )
-    action = jnp.stack(
-        [getattr(action_normalizations, f).denormalize(norm_action[i]) for i, f, in enumerate(action_fields)], axis=-1
-    )
-    action_fn = lambda t: action
-
-    dxdt = ode(0.0, state, params, action_fn)
-
-    dxdt = jnp.stack(dxdt)
-    norm_dxdt = jnp.stack(
-        [
-            d * 2.0 / (getattr(physical_normalizations, f).max - getattr(physical_normalizations, f).min)
-            for f, d in zip(state_fields, dxdt)
-        ],
-        axis=-1,
-    )
-
-    return norm_dxdt
+from admpe.utils.helper import get_state_difference_for_env
 
 
 class VectorField(eqx.Module):
@@ -49,6 +18,7 @@ class VectorField(eqx.Module):
     z: jax.Array
     _points_per_dim: int | None
     _ode: Callable | None
+    _discrete_dynamics: Callable | None
     _labels_z: list[str] | None
     _labels_values: list[str] | None
 
@@ -144,6 +114,72 @@ class VectorField(eqx.Module):
         return (fig, ax)
 
 
+def normalized_ode(
+    norm_state_array,
+    norm_action,
+    ode,
+    params,
+    physical_normalizations,
+    action_normalizations,
+):
+
+    state_fields = [f.name for f in dataclasses.fields(physical_normalizations)]
+    action_fields = [f.name for f in dataclasses.fields(action_normalizations)]
+    state = jnp.stack(
+        [getattr(physical_normalizations, f).denormalize(norm_state_array[i]) for i, f, in enumerate(state_fields)],
+        axis=-1,
+    )
+    action = jnp.stack(
+        [getattr(action_normalizations, f).denormalize(norm_action[i]) for i, f, in enumerate(action_fields)], axis=-1
+    )
+    action_fn = lambda t: action
+
+    dxdt = ode(0.0, state, params, action_fn)
+
+    dxdt = jnp.stack(dxdt)
+    norm_dxdt = jnp.stack(
+        [
+            d * 2.0 / (getattr(physical_normalizations, f).max - getattr(physical_normalizations, f).min)
+            for f, d in zip(state_fields, dxdt)
+        ],
+        axis=-1,
+    )
+
+    return norm_dxdt
+
+
+def make_normalized_discrete_dynamics(
+    env: excenvs.CoreEnvironment,
+    state_difference: Callable | None = None,
+):
+    if state_difference is None:
+        state_difference = get_state_difference_for_env(env)
+
+    deterministic_env = eqx.tree_at(lambda e: e.process_noise_variance, env, 0.0)
+    template_state = deterministic_env.init_state()
+    normalizations = deterministic_env.env_properties.physical_normalizations
+    names = [f.name for f in dataclasses.fields(deterministic_env.PhysicalState)]
+
+    def discrete_dynamics(norm_state_array, norm_action):
+        physical_state = deterministic_env.PhysicalState(
+            **{name: getattr(normalizations, name).denormalize(norm_state_array[i]) for i, name in enumerate(names)}
+        )
+        state = eqx.tree_at(
+            lambda s: s.physical_state,
+            template_state,
+            physical_state,
+        )
+        _, next_state = deterministic_env.step(state, norm_action)
+
+        next_norm_state_array = jnp.stack(
+            [getattr(normalizations, name).normalize(getattr(next_state.physical_state, name)) for name in names]
+        )
+
+        return state_difference(next_norm_state_array, norm_state_array)
+
+    return discrete_dynamics
+
+
 class DynamicsVectorField(VectorField):
 
     @classmethod
@@ -153,22 +189,30 @@ class DynamicsVectorField(VectorField):
         points_per_dim: int,
         low: float = -1.0,
         high: float = 1.0,
+        *,
+        use_discrete_dynamics: bool = False,
     ):
 
         dim = env.physical_state_dim + env.action_dim
 
         z = build_grid(dim, low=low, high=high, points_per_dim=points_per_dim)
 
-        specific_normalized_ode = partial(
-            normalized_ode,
-            ode=env._ode,
-            params=env.env_properties.static_params,
-            physical_normalizations=env.env_properties.physical_normalizations,
-            action_normalizations=env.env_properties.action_normalizations,
-        )
+        if use_discrete_dynamics:
+            ode = None
+            discrete_dynamics = make_normalized_discrete_dynamics(env)
+            evaluate = discrete_dynamics
+        else:
+            ode = partial(
+                normalized_ode,
+                ode=env._ode,
+                params=env.env_properties.static_params,
+                physical_normalizations=env.env_properties.physical_normalizations,
+                action_normalizations=env.env_properties.action_normalizations,
+            )
+            discrete_dynamics = None
+            evaluate = ode
 
-        vec_norm_ode = eqx.filter_vmap(specific_normalized_ode, in_axes=(0, 0))
-        norm_dxdt = vec_norm_ode(
+        values = eqx.filter_vmap(evaluate, in_axes=(0, 0))(
             z[:, : env.physical_state_dim],
             z[:, env.physical_state_dim :],
         )
@@ -176,18 +220,21 @@ class DynamicsVectorField(VectorField):
         physical_labels = [f.name for f in dataclasses.fields(env.PhysicalState)]
         action_labels = [f.name for f in dataclasses.fields(env.Action)]
 
+        assert ode is not None or discrete_dynamics is not None
+
         return cls(
-            values=norm_dxdt,
+            values=values,
             z=z,
             _points_per_dim=points_per_dim,
-            _ode=specific_normalized_ode,
+            _ode=ode,
+            _discrete_dynamics=discrete_dynamics,
             _labels_z=physical_labels + action_labels,
             _labels_values=physical_labels,
         )
 
     @classmethod
     def from_model(cls, model, low, high, points_per_dim):
-        pass
+        raise NotImplementedError()
 
 
 class CurvatureVectorField(VectorField):
@@ -198,4 +245,17 @@ class CurvatureVectorField(VectorField):
 
     @classmethod
     def from_model(cls, model, low, high, points_per_dim):
+        raise NotImplementedError()
+
+
+class LolaVectorField(VectorField):
+    @classmethod
+    def from_env(cls, env, low, high, points_per_dim):
         pass
+
+    @classmethod
+    def from_model(cls, model, low, high, points_per_dim):
+        raise NotImplementedError()
+
+    def from_data(cls, data, low, high, points_per_dim):
+        raise NotImplementedError()
