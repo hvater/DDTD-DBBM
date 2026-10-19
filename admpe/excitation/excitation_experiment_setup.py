@@ -98,6 +98,7 @@ def construct_target_distribution(
     elif excitation_objective == "dmpe_static_dynamics":
         vf = DynamicsVectorField.from_env(
             env,
+            penalty_function,
             alg_params["points_per_dim"],
             low=-alg_params["grid_extend"],
             high=alg_params["grid_extend"],
@@ -115,6 +116,7 @@ def construct_target_distribution(
     elif excitation_objective == "dmpe_static_mixture_dynamics":
         vf = DynamicsVectorField.from_env(
             env,
+            penalty_function,
             alg_params["points_per_dim"],
             low=-alg_params["grid_extend"],
             high=alg_params["grid_extend"],
@@ -144,6 +146,7 @@ def construct_target_distribution(
         if excitation_objective == "dmpe_static_LOLA_analytical":
             lola_vf = LolaVectorField.from_env(
                 env,
+                penalty_function,
                 alg_params["points_per_dim"],
                 low=-alg_params["grid_extend"],
                 high=alg_params["grid_extend"],
@@ -152,6 +155,7 @@ def construct_target_distribution(
         elif excitation_objective == "dmpe_static_LOLA_ls":
             lola_vf = LolaVectorField.from_env(
                 env,
+                penalty_function,
                 alg_params["points_per_dim"],
                 low=-alg_params["grid_extend"],
                 high=alg_params["grid_extend"],

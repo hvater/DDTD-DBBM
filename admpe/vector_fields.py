@@ -186,6 +186,7 @@ class DynamicsVectorField(VectorField):
     def from_env(
         cls,
         env: excenvs.CoreEnvironment,
+        penalty_function: Callable,
         points_per_dim: int,
         low: float = -1.0,
         high: float = 1.0,
@@ -216,6 +217,11 @@ class DynamicsVectorField(VectorField):
             z[:, : env.physical_state_dim],
             z[:, env.physical_state_dim :],
         )
+
+        d_x = env.physical_state_dim
+        feasible = jax.vmap(lambda q: penalty_function(q[None, :d_x], q[None, d_x:]) == 0)(z)
+        # overwrite all infeasible values with zero
+        values = jnp.where(feasible[:, None], values, jnp.zeros_like(values))
 
         physical_labels = [f.name for f in dataclasses.fields(env.PhysicalState)]
         action_labels = [f.name for f in dataclasses.fields(env.Action)]
@@ -286,26 +292,48 @@ class LolaVectorField(VectorField):
     """
 
     @staticmethod
-    def evaluate_nonlinearity(z, discrete_dynamics, offsets, env, analytical_jac: bool = True):
-        dynamics = lambda z: discrete_dynamics(z[: env.physical_state_dim], z[env.physical_state_dim :])
+    def evaluate_nonlinearity(
+        z,
+        discrete_dynamics,
+        offsets,
+        env,
+        penalty_function,
+        analytical_jac: bool = True,
+    ):
+        d_x = env.physical_state_dim
 
-        center = dynamics(z)
-        neighbors = jax.vmap(dynamics)(z[None, :] + offsets)
-        differences = neighbors - center
+        dynamics = lambda q: discrete_dynamics(q[:d_x], q[d_x:])
+        feasible = lambda q: penalty_function(q[None, :d_x], q[None, d_x:]) == 0
+
+        neighbor_points = z[None, :] + offsets
+
+        valid = jax.vmap(feasible)(neighbor_points)
+        count = valid.sum()
+
+        # differences are forced to zero if a point is not safe by setting them to the same value as `z`
+        safe_points = jnp.where(valid[:, None], neighbor_points, z)
+        differences = jax.vmap(dynamics)(safe_points) - dynamics(z)
+
         if analytical_jac:
             jacobian = jax.jacrev(dynamics)(z)
             slopes = jacobian.T
         else:
-            slopes = jnp.linalg.lstsq(offsets, differences, rcond=None)[0]
+            A = jnp.where(valid[:, None], offsets, 0.0)
+            B = jnp.where(valid[:, None], differences, 0.0)
+            slopes = jnp.linalg.lstsq(A, B, rcond=None)[0]
 
         lola_residuals = differences - offsets @ slopes
-        score = jnp.mean(jnp.linalg.norm(lola_residuals, axis=-1))
+        reduced_residuals = jnp.linalg.norm(lola_residuals, axis=-1)
+
+        # average over the valid results
+        score = jnp.where(valid, reduced_residuals, 0.0).sum() / jnp.maximum(count, 1)
         return jnp.atleast_1d(score)
 
     @classmethod
     def from_env(
         cls,
         env,
+        penalty_function,
         points_per_dim,
         low,
         high,
@@ -325,22 +353,32 @@ class LolaVectorField(VectorField):
             discrete_dynamics = make_normalized_discrete_dynamics(env)
 
             if full_neighbours:
+                # computes neighbours on the axes and diagonals
                 offsets = get_full_neighbours(radius, dim)
             else:
                 # only computes neighbours on the full axes
                 offsets = radius * jnp.concatenate([jnp.eye(dim), -jnp.eye(dim)], axis=0)
+
+            # to ensure functionality at the border of the area
+            offsets = jnp.concatenate([offsets, 0.5 * offsets], axis=0)
 
             evaluate = partial(
                 cls.evaluate_nonlinearity,
                 discrete_dynamics=discrete_dynamics,
                 offsets=offsets,
                 env=env,
+                penalty_function=penalty_function,
                 analytical_jac=analytical_jac,
             )
         else:
             raise NotImplementedError()
 
         values = eqx.filter_vmap(evaluate, in_axes=(0))(z)
+
+        d_x = env.physical_state_dim
+        feasible = jax.vmap(lambda q: penalty_function(q[None, :d_x], q[None, d_x:]) == 0)(z)
+        # overwrite all infeasible values with zero
+        values = jnp.where(feasible[:, None], values, jnp.zeros_like(values))
 
         physical_labels = [f.name for f in dataclasses.fields(env.PhysicalState)]
         action_labels = [f.name for f in dataclasses.fields(env.Action)]
