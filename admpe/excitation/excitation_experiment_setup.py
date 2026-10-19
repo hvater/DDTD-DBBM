@@ -22,6 +22,8 @@ SUPPORTED_OBJECTIVES = (
     "dmpe_uniform",
     "dmpe_static_dynamics",  # mixture of dynamics based and uniform
     "dmpe_static_mixture_dynamics",
+    "dmpe_static_LOLA_ls",
+    "dmpe_static_LOLA_analytical",
     "gp_grid",
     "gp_trajectory",
 )
@@ -138,11 +140,23 @@ def construct_target_distribution(
         )
         raise NotImplementedError()
 
-    elif excitation_objective.starts_with("dmpe_static_LOLA_"):
+    elif excitation_objective.startswith("dmpe_static_LOLA_"):
         if excitation_objective == "dmpe_static_LOLA_analytical":
-            lola_vf = LolaVectorField.from_env(env, 50, -1.05, 1.05, analytical_jac=True)
+            lola_vf = LolaVectorField.from_env(
+                env,
+                alg_params["points_per_dim"],
+                low=-alg_params["grid_extend"],
+                high=alg_params["grid_extend"],
+                analytical_jac=True,
+            )
         elif excitation_objective == "dmpe_static_LOLA_ls":
-            lola_vf = LolaVectorField.from_env(env, 50, -1.05, 1.05, analytical_jac=False)
+            lola_vf = LolaVectorField.from_env(
+                env,
+                alg_params["points_per_dim"],
+                low=-alg_params["grid_extend"],
+                high=alg_params["grid_extend"],
+                analytical_jac=False,
+            )
 
         lola_target = TargetDensity.from_vector_field(
             vf=lola_vf,
