@@ -8,7 +8,7 @@ os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
 if __name__ == "__main__":
 
-    exp_name = "state_only_run2"
+    exp_name = "state_only_run5"
 
     for system_name in ["fluid_tank", "pendulum", "cart_pole"]:
 
@@ -23,7 +23,7 @@ if __name__ == "__main__":
             system_name=system_name,
             dataset_paths=dataset_paths,
             model_type="neural_euler",
-            gpu_id=0,
+            gpu_id=1,
             exp_name=exp_name,
             seeds=np.arange(0, 5, 1).tolist(),
         )

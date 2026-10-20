@@ -191,7 +191,7 @@ class DynamicsVectorField(VectorField):
         low: float = -1.0,
         high: float = 1.0,
         *,
-        use_discrete_dynamics: bool = False,
+        use_discrete_dynamics: bool = True,
     ):
 
         dim = env.physical_state_dim + env.action_dim
@@ -246,8 +246,78 @@ class DynamicsVectorField(VectorField):
 class CurvatureVectorField(VectorField):
 
     @classmethod
-    def from_env(cls, env, points_per_dim, low, high, *, use_discrete_dynamics: bool = False):
-        pass
+    def from_env(
+        cls,
+        env,
+        penalty_function,
+        points_per_dim,
+        low,
+        high,
+        *,
+        use_discrete_dynamics: bool = True,
+        smooth_domain=None,
+    ):
+        d_x = env.physical_state_dim
+        dim = d_x + env.action_dim
+
+        z = build_grid(
+            dim,
+            low=low,
+            high=high,
+            points_per_dim=points_per_dim,
+        )
+
+        if use_discrete_dynamics:
+            ode = None
+            discrete_dynamics = make_normalized_discrete_dynamics(env)
+            dynamics = discrete_dynamics
+        else:
+            ode = partial(
+                normalized_ode,
+                ode=env._ode,
+                params=env.env_properties.static_params,
+                physical_normalizations=(env.env_properties.physical_normalizations),
+                action_normalizations=(env.env_properties.action_normalizations),
+            )
+            discrete_dynamics = None
+            dynamics = ode
+
+        joint_dynamics = lambda q: dynamics(q[:d_x], q[d_x:])
+        hessian = jax.hessian(joint_dynamics)
+
+        def score(q):
+            H = hessian(q)  # shape: (state_dim, dim, dim)
+            return jnp.atleast_1d(jnp.sqrt(jnp.sum(H**2)))
+
+        valid = jax.vmap(lambda q: penalty_function(q[None, :d_x], q[None, d_x:]) == 0)(z)
+        if smooth_domain is not None:
+            valid &= jax.vmap(smooth_domain)(z)
+
+        safe_z = jnp.where(valid[:, None], z, jnp.zeros_like(z))
+        values = eqx.filter_jit(eqx.filter_vmap(score))(safe_z)
+
+        # Construction-time check: do not silently turn undefined
+        # curvature at selected points into zero curvature.
+        if bool(jnp.any(valid & ~jnp.isfinite(values[:, 0]))):
+            raise ValueError(
+                "Non-finite Hessian on the selected domain. " "Restrict smooth_domain or regularize the dynamics."
+            )
+
+        values = jnp.where(valid[:, None], values, 0.0)
+
+        labels = [f.name for f in dataclasses.fields(env.PhysicalState)] + [
+            f.name for f in dataclasses.fields(env.Action)
+        ]
+
+        return cls(
+            values=values,
+            z=z,
+            _points_per_dim=points_per_dim,
+            _ode=ode,
+            _discrete_dynamics=discrete_dynamics,
+            _labels_z=labels,
+            _labels_values=["Hessian norm"],
+        )
 
     @classmethod
     def from_model(cls, model, points_per_dim, low, high, *, use_discrete_dynamics: bool = False):

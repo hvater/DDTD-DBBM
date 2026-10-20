@@ -5,6 +5,8 @@ from copy import deepcopy
 import jax
 import jax.numpy as jnp
 
+import exciting_environments as excenvs
+
 from dmpe.models.models import NeuralEulerODE, NeuralEulerODECartpole, NeuralEulerODEPendulum
 from dmpe.utils.density_estimation import build_grid, DensityEstimate, get_uniform_target_distribution
 from dmpe.utils.signals import aprbs
@@ -14,7 +16,7 @@ from dmpe.utils.env_utils.pendulum_utils import setup_env as setup_pendulum
 
 from admpe.excitation.gp_excitation.gp_model import GPModel, update_gp_dataset
 from admpe.adaptive_densities import TargetDensity
-from admpe.vector_fields import DynamicsVectorField, LolaVectorField
+from admpe.vector_fields import DynamicsVectorField, CurvatureVectorField, LolaVectorField
 from admpe.excitation.excitation_parameterization import fetch_parameterization
 
 SUPPORTED_SYSTEMS = ("fluid_tank", "pendulum", "cart_pole")
@@ -22,6 +24,8 @@ SUPPORTED_OBJECTIVES = (
     "dmpe_uniform",
     "dmpe_static_dynamics",  # mixture of dynamics based and uniform
     "dmpe_static_mixture_dynamics",
+    "dmpe_static_curv",
+    "dmpe_static_mixture_curv",
     "dmpe_static_LOLA_ls",
     "dmpe_static_LOLA_analytical",
     "gp_grid",
@@ -131,7 +135,15 @@ def construct_target_distribution(
         )
         target_distribution = (target.p[0] + uniform_distribution) / 2
     elif excitation_objective == "dmpe_static_curv":
-        vf = None  # implement curvature based vector field
+        vf = CurvatureVectorField.from_env(
+            env,
+            penalty_function,
+            points_per_dim=alg_params["points_per_dim"],
+            low=-alg_params["grid_extend"],
+            high=alg_params["grid_extend"],
+            use_discrete_dynamics=True,
+            smooth_domain=(lambda q: (q[0] > -1.0)) if isinstance(env, excenvs.FluidTank) else None,
+        )
         target = TargetDensity.from_vector_field(
             vf=vf,
             bandwidth=alg_params["bandwidth"],
@@ -140,7 +152,27 @@ def construct_target_distribution(
             obs_dim=env.obs_dim,
             act_dim=env.action_dim,
         )
-        raise NotImplementedError()
+        target_distribution = target.p[0]
+
+    elif excitation_objective == "dmpe_static_mixture_curv":
+        vf = CurvatureVectorField.from_env(
+            env,
+            penalty_function,
+            points_per_dim=alg_params["points_per_dim"],
+            low=-alg_params["grid_extend"],
+            high=alg_params["grid_extend"],
+            use_discrete_dynamics=True,
+            smooth_domain=(lambda q: (q[0] > -1.0)) if isinstance(env, excenvs.FluidTank) else None,
+        )
+        target = TargetDensity.from_vector_field(
+            vf=vf,
+            bandwidth=alg_params["bandwidth"],
+            penalty_function=penalty_function,
+            consider_action_distribution=True,
+            obs_dim=env.obs_dim,
+            act_dim=env.action_dim,
+        )
+        target_distribution = (target.p[0] + uniform_distribution) / 2
 
     elif excitation_objective.startswith("dmpe_static_LOLA_"):
         if excitation_objective == "dmpe_static_LOLA_analytical":
