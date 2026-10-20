@@ -39,7 +39,7 @@ def setup_parameterization(
 
 def setup_experiment(model_type, seed, params):
 
-    if model_type == "neural_euler":
+    if model_type.startswith("neural_euler"):
         model_key, loader_key = jax.random.split(jax.random.PRNGKey(seed))
         params["model_params"]["key"] = model_key
         model = params["model_class"](**params["model_params"])
