@@ -23,8 +23,8 @@ if __name__ == "__main__":
         run_modeling_experiment(
             system_name=system_name,
             dataset_paths=dataset_paths,
-            model_type="neural_euler",
-            gpu_id=1,
-            exp_name=exp_name,
+            model_type="neural_euler_tiny_10",
+            gpu_id=0,
+            exp_name="testing_adaptive_model_params",
             seeds=np.arange(0, 5, 1).tolist(),
         )

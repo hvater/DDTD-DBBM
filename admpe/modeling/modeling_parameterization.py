@@ -13,10 +13,11 @@ def fetch_parameterization(
     if model_type.startswith("neural_euler"):
         if model_type == "neural_euler":
             size_identifier = "large"
-            horizon = {"fluid_tank": 10, "pendulum": 20, "cart_pole": 50}[system_name]
+            sequence_length = {"fluid_tank": 10, "pendulum": 20, "cart_pole": 50}[system_name]
         else:
             size_identifier = model_type.split("_")[-2]
             horizon = int(model_type.split("_")[-1])
+            sequence_length = horizon + 1
 
         match size_identifier:
             case "tiny":
@@ -43,7 +44,7 @@ def fetch_parameterization(
             start_learning=None,
             training_batch_size=128,
             n_train_steps=25,
-            sequence_length=horizon,
+            sequence_length=sequence_length,
             featurize=featurize,
             model_optimizer=optax.adabelief(learning_rate=1e-4),
             tau=1,  # NOTE: physically not true, but likely not a problem
