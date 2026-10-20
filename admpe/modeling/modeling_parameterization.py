@@ -1,6 +1,20 @@
+import re
 import optax
 
 from admpe.modeling.gp_modeling import GPSequenceModel, GPTransitionModel
+
+
+def parse_neural_euler_variant(model_type: str) -> tuple[str, int]:
+    match = re.fullmatch(r"neural_euler_(tiny|small|medium|large)_(-?[0-9]+)", model_type)
+    if match is None:
+        raise ValueError("Expected neural_euler_<size>_<horizon>, " "where size is tiny, small, medium, or large.")
+
+    size, horizon_text = match.groups()
+    horizon = int(horizon_text)
+    if horizon <= 1:
+        raise ValueError("Training horizon must be greater than 1.")
+
+    return size, horizon
 
 
 def fetch_parameterization(
@@ -15,8 +29,7 @@ def fetch_parameterization(
             size_identifier = "large"
             sequence_length = {"fluid_tank": 10, "pendulum": 20, "cart_pole": 50}[system_name]
         else:
-            size_identifier = model_type.split("_")[-2]
-            horizon = int(model_type.split("_")[-1])
+            size_identifier, horizon = parse_neural_euler_variant(model_type)
             sequence_length = horizon + 1
 
         match size_identifier:

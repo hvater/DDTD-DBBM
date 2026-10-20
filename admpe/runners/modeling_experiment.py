@@ -24,8 +24,21 @@ from admpe.modeling.modeling_experiment_setup import (
     setup_parameterization,
     setup_experiment,
 )
+from admpe.modeling.modeling_parameterization import parse_neural_euler_variant
 from admpe.modeling.model_fitting import fit
 from admpe.modeling.validation import get_validation_data
+
+
+def model_type_argument(value: str) -> str:
+    if value in SUPPORTED_MODELS:
+        return value
+
+    try:
+        parse_neural_euler_variant(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+
+    return value
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -33,7 +46,11 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--system_name", choices=SUPPORTED_SYSTEMS, required=True)
     parser.add_argument("--dataset_paths", nargs="+", type=Path, required=True)
     parser.add_argument("--seeds", nargs="+", type=int, default=[0])
-    parser.add_argument("--model_type", choices=SUPPORTED_MODELS, default="neural_euler")
+    parser.add_argument(
+        "--model_type",
+        type=model_type_argument,
+        default="neural_euler",
+    )
     parser.add_argument("--exp_name", default=None)
     parser.add_argument("--gpu_id", type=int, default=-1)
     parser.add_argument("--use_f64", action="store_true")
