@@ -25,6 +25,7 @@ from admpe.modeling.modeling_experiment_setup import (
     setup_experiment,
 )
 from admpe.modeling.model_fitting import fit
+from admpe.modeling.validation import get_validation_data
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -50,6 +51,9 @@ def run_experiment_for_seed(
     base_id,
     params,
     output_root,
+    validation_data,
+    validation_every,
+    selection_metric,
 ):
     root = Path(output_root)
     incomplete_root = root / "_incomplete"
@@ -92,7 +96,7 @@ def run_experiment_for_seed(
             "float64" if metadata["use_f64"] else "float32",
         )
 
-        result = fit(
+        result, validation_summary = fit(
             train_data,
             model_type,
             model,
@@ -100,6 +104,9 @@ def run_experiment_for_seed(
             opt_state,
             loader_key,
             params,
+            validation_data=validation_data,
+            validation_every=validation_every,
+            selection_metric=selection_metric,
         )
         save_modeling_result(working_path, result)
         metadata["status"] = "completed"
@@ -140,8 +147,8 @@ def run_modeling_experiment(
     gpu_id: int = -1,
     output_root: Path = MODELING_EXPERIMENTS_ROOT,
     continue_on_error: bool = False,
-    callback=None,
-    callback_every: int | None = None,
+    validation_every: int = 50,
+    selection_metric: str = "one_step_mse",
     *,
     model_trainer_overrides=None,
     model_overrides=None,
@@ -149,9 +156,6 @@ def run_modeling_experiment(
     # validate further inputs
     if gpu_id < -1:
         raise ValueError("gpu_id must be -1 for CPU or a nonnegative GPU index.")
-
-    if callback_every is not None and callback_every < 1:
-        raise ValueError("callback_every must be positive.")
 
     if exp_name is not None and not re.fullmatch(r"[A-Za-z0-9_.-]+", exp_name):
         raise ValueError("exp_name may contain only letters, digits, underscores, dots, and hyphens.")
@@ -184,8 +188,7 @@ def run_modeling_experiment(
     # start experiment:
     paths = []
     with jax.default_device(devices[index]):
-        # TODO: load validation and test data sets?
-        # maybe validation would be sufficient and test data can be done separately?
+        validation_data = get_validation_data(system_name)
 
         for dataset_idx, dataset_path in enumerate(dataset_paths, start=1):
             dataset_path = Path(dataset_path)
@@ -244,6 +247,9 @@ def run_modeling_experiment(
                             base_id=base_id,
                             params=params,
                             output_root=output_root,
+                            validation_data=validation_data,
+                            validation_every=validation_every,
+                            selection_metric=selection_metric,
                         )
                     )
                 except Exception:
