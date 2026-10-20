@@ -11,8 +11,8 @@ def parse_neural_euler_variant(model_type: str) -> tuple[str, int]:
 
     size, horizon_text = match.groups()
     horizon = int(horizon_text)
-    if horizon <= 1:
-        raise ValueError("Training horizon must be greater than 1.")
+    if horizon < 1:
+        raise ValueError("Training horizon must be at least 1.")
 
     return size, horizon
 

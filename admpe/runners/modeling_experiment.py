@@ -170,6 +170,7 @@ def run_modeling_experiment(
     gpu_id: int = -1,
     output_root: Path = MODELING_EXPERIMENTS_ROOT,
     continue_on_error: bool = False,
+    perform_validation: bool = False,
     validation_every: int = 50,
     selection_metric: str = "one_step_mse",
     *,
@@ -211,7 +212,8 @@ def run_modeling_experiment(
     # start experiment:
     paths = []
     with jax.default_device(devices[index]):
-        validation_data = get_validation_data(system_name)
+
+        validation_data = get_validation_data(system_name) if perform_validation else None
 
         for dataset_idx, dataset_path in enumerate(dataset_paths, start=1):
             dataset_path = Path(dataset_path)
