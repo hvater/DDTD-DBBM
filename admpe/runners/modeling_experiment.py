@@ -111,6 +111,12 @@ def run_experiment_for_seed(
         save_modeling_result(working_path, result)
         metadata["status"] = "completed"
         metadata["elapsed_seconds"] = perf_counter() - started
+
+        metadata["validation"] = {
+            "every": validation_every,
+            **validation_summary,
+        }
+
         write_metadata(working_path / "experiment.json", metadata)
 
     except Exception as error:

@@ -1,6 +1,8 @@
 import pathlib
 import logging as log
 
+import matplotlib.pyplot as plt
+import pandas as pd
 import equinox as eqx
 import jax.numpy as jnp
 
@@ -67,7 +69,7 @@ def one_step_mse(model, validation_data, tau, featurize):
     targets = validation_data["targets"]
     pred = eqx.filter_vmap(model.step, in_axes=(0, 0, None))(observations, actions, tau)
 
-    error = eqx.filter_vmap(featurize)(pred) - eqx.filter_vmap(featurize)(targets)
+    error = eqx.filter_vmap(featurize)(pred) - targets
     return jnp.mean(error**2)
 
 
@@ -82,3 +84,24 @@ def validate(model, validation_data, tau, featurize):
             featurize,
         )
     }
+
+
+def visualize_validation_scores(
+    modeling_result,
+    selection_metric="one_step_mse",
+):
+
+    validation_result = modeling_result["metadata"]["validation"]
+
+    fig, axs = plt.subplots(1, 1, figsize=(7, 4))
+
+    history = pd.DataFrame(validation_result["history"])
+
+    axs.plot(history["optimizer_steps"], history[selection_metric])
+    axs.set_yscale("log")
+    axs.grid(True, alpha=0.3)
+
+    axs.set_ylabel(selection_metric)
+    axs.set_xlabel("optimizer steps")
+
+    return fig, axs
