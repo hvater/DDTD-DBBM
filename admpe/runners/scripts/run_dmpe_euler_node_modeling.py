@@ -1,10 +1,11 @@
 import os
 import numpy as np
 
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+
 from admpe.data_management import list_excitation_results
 from admpe.runners.modeling_experiment import run_modeling_experiment
 
-os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
 if __name__ == "__main__":
 

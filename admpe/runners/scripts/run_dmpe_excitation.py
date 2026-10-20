@@ -1,9 +1,11 @@
 import os
 import numpy as np
 
-from admpe.runners.excitation_experiment import run_excitation_experiment
 
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+
+from admpe.runners.excitation_experiment import run_excitation_experiment
+
 
 if __name__ == "__main__":
 
