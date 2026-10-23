@@ -9,8 +9,6 @@ import jax.numpy as jnp
 from dmpe.models.model_utils import simulate_ahead_with_env
 
 from admpe.utils.signals import aprbs, multisine
-from admpe.data_management import TESTING_TRAJECTORIES_ROOT
-from admpe.excitation.excitation_experiment_setup import SUPPORTED_SYSTEMS
 
 from admpe.sets import sample_from_set
 
@@ -35,8 +33,8 @@ SIGNALS = {
 }
 
 SUPPORTED_SIGNALS = tuple(SIGNALS)
-SIMPLE_TESTING_SIGNALS_ROOT = TESTING_TRAJECTORIES_ROOT / "simple_signals"
-SIMPLE_TESTING_SIGNALS_ROOT.mkdir(parents=True, exist_ok=True)
+# SIMPLE_TESTING_SIGNALS_ROOT = TESTING_TRAJECTORIES_ROOT / "simple_signals"
+# SIMPLE_TESTING_SIGNALS_ROOT.mkdir(parents=True, exist_ok=True)
 
 
 def get_candidate_batch_function(env, params, penalty_function, data_key, safe_state_set):
@@ -53,7 +51,7 @@ def get_candidate_batch_function(env, params, penalty_function, data_key, safe_s
             raise ValueError("Signal generator returned an unexpected shape.")
 
         # simulate sequence from an initial state
-        if params["deterministic_initial_state"]:
+        if params["deterministic_initial_state"] or safe_state_set is None:
             initial_state = env.init_state(
                 state_key,
                 deterministic_state=params["deterministic_initial_state"],

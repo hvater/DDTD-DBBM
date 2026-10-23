@@ -10,7 +10,12 @@ import equinox as eqx
 
 from dmpe.utils.density_estimation import build_grid
 
-from admpe.data_management import load_excitation_result, load_modeling_result, load_testing_sequences
+from admpe.data_management import (
+    load_excitation_result,
+    load_modeling_result,
+    load_testing_sequences,
+    TESTING_TRAJECTORIES_ROOT,
+)
 
 from admpe.evaluation.modeling_metrics import (
     prediction_metrics,
@@ -139,16 +144,20 @@ def evaluate_model(
     system_name: str,
     wrapped_model: ModelWrapper,
     wrapped_env: EnvWrapper,
-    filter_prediction_points: bool = False,
+    filter_testing_points: bool = False,
 ):
-    safely_excitable_set = CartesianGridSet.from_system_name(system_name)[0] if filter_prediction_points else None
+    safely_excitable_set = CartesianGridSet.from_system_name(system_name)[0] if filter_testing_points else None
     prediction_metric_values = evaluate_model_prediction(
         wrapped_model,
         wrapped_env,
         safely_excitable_set=safely_excitable_set,
     )
 
-    testing_data = load_testing_sequences(system_name, paths=None)
+    if filter_testing_points:
+        rollout_data_path = TESTING_TRAJECTORIES_ROOT / "safely_excitable_trajectories"
+    else:
+        rollout_data_path = TESTING_TRAJECTORIES_ROOT / "box_constrained_trajectories"
+    testing_data = load_testing_sequences(system_name, paths=rollout_data_path)
     rollout_metric_values = {}
     for signal_key, signal_testing_data in testing_data.items():
         rollout_metric_values[signal_key] = evaluate_model_rollout(

@@ -452,10 +452,10 @@ def run_testing_dataset_experiment(
     base_id = f"{system_name}-{signal_name}{tag}-{uuid4().hex[:8]}"
     with jax.default_device(devices[index]):
         try:
-            if output_root is TESTING_TRAJECTORIES_ROOT:
-                output_root = (
-                    ocp.OCP_TESTING_SIGNALS_ROOT if signal_name == "ocp" else simple.SIMPLE_TESTING_SIGNALS_ROOT
-                )
+            # if output_root is TESTING_TRAJECTORIES_ROOT:
+            #     output_root = (
+            #         ocp.OCP_TESTING_SIGNALS_ROOT if signal_name == "ocp" else simple.SIMPLE_TESTING_SIGNALS_ROOT
+            #     )
             final_path = generate_testing_dataset(
                 system_name=system_name,
                 signal_name=signal_name,

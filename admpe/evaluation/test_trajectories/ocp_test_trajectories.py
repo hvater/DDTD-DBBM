@@ -11,11 +11,8 @@ import jax_tqdm
 import exciting_environments as excenvs
 from dmpe.models.model_utils import simulate_ahead_with_env
 
-from admpe.data_management import TESTING_TRAJECTORIES_ROOT
 from admpe.sets import sample_from_set
 
-OCP_TESTING_SIGNALS_ROOT = TESTING_TRAJECTORIES_ROOT / "ocp"
-OCP_TESTING_SIGNALS_ROOT.mkdir(parents=True, exist_ok=True)
 
 SUPPORTED_SIGNALS = ["ocp"]
 
@@ -154,7 +151,7 @@ def get_candidate_batch_function(
 
         # TODO: make intital state and target observation safe
 
-        if params["deterministic_initial_state"]:
+        if params["deterministic_initial_state"] or safe_state_set is None:
             initial_state = env.init_state(
                 state_key,
                 deterministic_state=params["deterministic_initial_state"],
@@ -169,7 +166,16 @@ def get_candidate_batch_function(
                 key=noise_key,
             )
 
-        target_observation, target_sample_ok = sample_from_set(target_key, safe_state_set)
+        if safe_state_set is None:
+            target_observation = jax.random.uniform(
+                key=target_key,
+                shape=(env.obs_dim,),
+                minval=-1,
+                maxval=1,
+            )
+            target_sample_ok = True
+        else:
+            target_observation, target_sample_ok = sample_from_set(target_key, safe_state_set)
 
         chosen_actions, losses = optimize_actions_multistart(
             proposed_actions,

@@ -414,10 +414,12 @@ def load_testing_sequences(
     system_name: str,
     paths: list[Path] | None = None,
     *,
-    root: str | Path = TESTING_TRAJECTORIES_ROOT,
+    root: str | Path = TESTING_TRAJECTORIES_ROOT / "safely_excitable_trajectories",
 ):
     # paths are not specified, look for results below root
     discover = paths is None
+    log.info("No path is specified for loading testing sequences, searching at:" + str(root))
+
     if discover:
         paths = [file.parent for file in sorted(Path(root).rglob("experiment.json"))]
 
