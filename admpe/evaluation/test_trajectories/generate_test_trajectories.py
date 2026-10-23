@@ -402,7 +402,7 @@ def run_testing_dataset_experiment(
     n_sequences: int = 100,
     n_time_steps: int = 1001,
     batch_size: int = 32,
-    output_root: Path = TESTING_TRAJECTORIES_ROOT,
+    output_root: Path | None = None,
     *,
     use_safely_excitable_set: bool = True,
     amplitude: float = 1.0,
@@ -411,6 +411,12 @@ def run_testing_dataset_experiment(
     max_attempts: int | None = int(1e6),
     signal_overrides=None,
 ) -> Path:
+
+    if output_root is None:
+        if use_safely_excitable_set:
+            output_root = TESTING_TRAJECTORIES_ROOT / "safely_excitable_trajectories"
+        else:
+            output_root = TESTING_TRAJECTORIES_ROOT / "box_constrained_trajectories"
 
     if system_name not in SUPPORTED_SYSTEMS:
         raise ValueError(f"Unknown system: {system_name}")

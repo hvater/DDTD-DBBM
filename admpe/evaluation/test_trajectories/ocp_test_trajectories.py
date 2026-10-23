@@ -51,7 +51,7 @@ def loss_function(
 
     # only evaluate the first n_eval_steps observations for the loss
     # the rest is only considered for the penalties
-    evaluated_observations = observations[: n_eval_steps + 1]
+    evaluated_observations = observations[1 : n_eval_steps + 1]
 
     sq_distances = jnp.sum((featurize(evaluated_observations) - featurize(target[None])) ** 2, axis=-1)
     loss = jnp.min(sq_distances)
@@ -115,7 +115,8 @@ def optimize_actions_multistart(
     losses = eqx.filter_vmap(loss_function, in_axes=(0, None, None, None, None, None))(
         actions, target, init_obs, penalty_function, featurize, env
     )
-    best_idx = jnp.argmin(losses)
+    selection_losses = jnp.where(jnp.isfinite(losses), losses, jnp.inf)
+    best_idx = jnp.argmin(selection_losses)
     return actions[best_idx], losses[best_idx]
 
 

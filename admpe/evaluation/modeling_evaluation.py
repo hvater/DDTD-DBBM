@@ -157,7 +157,7 @@ def evaluate_model(
         rollout_data_path = TESTING_TRAJECTORIES_ROOT / "safely_excitable_trajectories"
     else:
         rollout_data_path = TESTING_TRAJECTORIES_ROOT / "box_constrained_trajectories"
-    testing_data = load_testing_sequences(system_name, paths=rollout_data_path)
+    testing_data = load_testing_sequences(system_name, root=rollout_data_path)
     rollout_metric_values = {}
     for signal_key, signal_testing_data in testing_data.items():
         rollout_metric_values[signal_key] = evaluate_model_rollout(
