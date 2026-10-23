@@ -85,7 +85,11 @@ class CartesianGridSet(eqx.Module):
         return finite & in_bounds & self.mask[tuple(indices)]
 
     def __and__(self, other):
-        assert jnp.all(self.axes == other.axes), "The Sets have to be discretized on the same grid."
+
+        same_grid = self.dim = other.dim and all(np.array_equal(a, b) for a, b in zip(self.axes, other.axes))
+
+        if not same_grid:
+            raise ValueError("The Sets must use the same coordinate grid.")
 
         assert self.mask.shape == other.mask.shape, ("The unflattened shape of the Sets must be the same.",)
 
@@ -271,7 +275,7 @@ def sample_from_set(
 class SafelyExcitableSet(CartesianGridSet):
 
     @classmethod
-    def from_system_name(cls, system_name: str) -> Self:
+    def from_system_name(cls, system_name: str) -> tuple[Self, Path]:
         filenames = {
             "fluid_tank": "fluid_tank_S_xu_666a769d-8c1b-4b.npz",
             "pendulum": "pendulum_S_xu_02430b86-ae0d-42.npz",
