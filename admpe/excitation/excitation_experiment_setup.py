@@ -330,10 +330,14 @@ def setup_model(system_name, model_type, model_params):
     return model_class(**model_params)
 
 
-def setup_estimator(excitation_objective, params):
+def setup_estimator(excitation_objective, params, trajectory=None):
 
-    dim_obs_space = params["model_params"]["obs_dim"]
-    dim_action_space = params["model_params"]["action_dim"]
+    if params["model_params"] is not None:
+        dim_obs_space = params["model_params"]["obs_dim"]
+        dim_action_space = params["model_params"]["action_dim"]
+    else:
+        dim_obs_space = trajectory["observations"].shape[-1]
+        dim_action_space = trajectory["actions"].shape[-1]
 
     if params["alg_params"]["consider_action_distribution"]:
         dim = dim_obs_space + dim_action_space

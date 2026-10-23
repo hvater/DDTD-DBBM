@@ -266,11 +266,15 @@ def load_excitation_result(path: Path):
 
     # reconstruct objects
     loading_params = deepcopy(params["model_params"])
-    loading_params["key"] = jnp.array(loading_params["key"], dtype=jnp.uint32)
-    model_template = setup_model(metadata["system_name"], metadata["model_type"], loading_params)
-    model = eqx.tree_deserialise_leaves(foldername / "model.eqx", model_template)
+    if loading_params is not None:
+        loading_params["key"] = jnp.array(loading_params["key"], dtype=jnp.uint32)
+        model_template = setup_model(metadata["system_name"], metadata["model_type"], loading_params)
+        model = eqx.tree_deserialise_leaves(foldername / "model.eqx", model_template)
+    else:
+        # perfect model knowledge has been utilized in the experiment
+        model = None
 
-    estimator_template = setup_estimator(metadata["excitation_objective"], params)
+    estimator_template = setup_estimator(metadata["excitation_objective"], params, trajectory)
     estimator = eqx.tree_deserialise_leaves(foldername / "estimator.eqx", estimator_template)
 
     return {
