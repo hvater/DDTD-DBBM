@@ -1,5 +1,6 @@
 from typing import Callable
-
+import math
+from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -11,7 +12,7 @@ import exciting_environments as excenvs
 from dmpe.models.model_utils import simulate_ahead_with_env
 
 from admpe.data_management import TESTING_TRAJECTORIES_ROOT
-
+from admpe.sets import sample_from_set
 
 OCP_TESTING_SIGNALS_ROOT = TESTING_TRAJECTORIES_ROOT / "ocp"
 OCP_TESTING_SIGNALS_ROOT.mkdir(parents=True, exist_ok=True)
@@ -26,6 +27,7 @@ OCP_DEFAULTS = dict(
     lr_init=1e-1,
     lr_decay_rate=0.1,
     lr_end=1e-4,
+    horizon_factor=1.5,  # to ensure that the remaining trajectory stays within bounds
 )
 
 
@@ -38,15 +40,6 @@ def generate_initial_actions(action_key, n_starts, n_steps, action_dim):
     )
 
 
-def generate_target_observation(target_key, obs_dim):
-    return jax.random.uniform(
-        key=target_key,
-        shape=(obs_dim,),
-        minval=-1,
-        maxval=1,
-    )
-
-
 def loss_function(
     actions: jax.Array,
     target: jax.Array,
@@ -54,10 +47,16 @@ def loss_function(
     penalty_function: Callable,
     featurize: Callable,
     env: excenvs.CoreEnvironment,
+    n_eval_steps: int,
 ):
     init_state = env.generate_state_from_observation(init_obs)
     observations, _ = simulate_ahead_with_env(env, init_obs, init_state, actions)
-    sq_distances = jnp.sum((featurize(observations) - featurize(target[None])) ** 2, axis=-1)
+
+    # only evaluate the first n_eval_steps observations for the loss
+    # the rest is only considered for the penalties
+    evaluated_observations = observations[: n_eval_steps + 1]
+
+    sq_distances = jnp.sum((featurize(evaluated_observations) - featurize(target[None])) ** 2, axis=-1)
     loss = jnp.min(sq_distances)
     # loss = jnp.sum((featurize(observations[-1, :]) - featurize(target)) ** 2)
     penalties = penalty_function(observations, actions) * 1e3
@@ -124,18 +123,23 @@ def optimize_actions_multistart(
 
 
 def get_candidate_batch_function(
-    env,
+    env: excenvs.CoreEnvironment,
     params,
     optimizer,
     featurize,
     loss_function,
     penalty_function,
     data_key,
+    safe_state_set,
     state_tolerance=1e-3,
     action_tolerance=1e-3,
 ):
 
-    n_steps = params["n_steps"]
+    n_eval_steps = params["n_steps"]
+    n_plan_steps = math.ceil(params["signal_params"]["horizon_factor"] * n_eval_steps)
+
+    prefix_loss = partial(loss_function, n_eval_steps=n_eval_steps)
+
     n_starts = params["signal_params"]["n_starts"]
     n_opt_steps = params["signal_params"]["n_opt_steps"]
 
@@ -144,19 +148,34 @@ def get_candidate_batch_function(
 
         action_key, state_key, target_key = jax.random.split(key, 3)
 
-        proposed_actions = generate_initial_actions(action_key, n_starts, n_steps, env.action_dim)
-        if proposed_actions.shape != (n_starts, n_steps, env.action_dim):
+        proposed_actions = generate_initial_actions(action_key, n_starts, n_plan_steps, env.action_dim)
+        if proposed_actions.shape != (n_starts, n_plan_steps, env.action_dim):
             raise ValueError("Initial_actions have an unexpected shape.")
 
-        initial_state = env.init_state(state_key, deterministic_state=params["deterministic_initial_state"])
-        initial_observation = env.generate_observation(initial_state)
-        target_observation = generate_target_observation(target_key, env.obs_dim)
+        # TODO: make intital state and target observation safe
+
+        if params["deterministic_initial_state"]:
+            initial_state = env.init_state(
+                state_key,
+                deterministic_state=params["deterministic_initial_state"],
+            )
+            initial_observation = env.generate_observation(initial_state)
+            initial_sample_ok = True
+        else:
+            sample_key, noise_key = jax.random.split(state_key)
+            initial_observation, initial_sample_ok = sample_from_set(sample_key, safe_state_set)
+            initial_state = env.generate_state_from_observation(
+                initial_observation,
+                key=noise_key,
+            )
+
+        target_observation, target_sample_ok = sample_from_set(target_key, safe_state_set)
 
         chosen_actions, losses = optimize_actions_multistart(
             proposed_actions,
             target_observation,
             initial_observation,
-            loss_function,
+            prefix_loss,
             penalty_function,
             featurize,
             env,
@@ -177,6 +196,12 @@ def get_candidate_batch_function(
         )
 
         valid = finite & (state_excess <= state_tolerance) & (action_excess <= action_tolerance)
+        valid = valid & initial_sample_ok & target_sample_ok
+
+        # only return the steps that were optimized for hitting the target
+        # the remaining optimized values are only needed for constraint adherence
+        observations = observations[: n_eval_steps + 1]
+        chosen_actions = chosen_actions[:n_eval_steps]
 
         return observations, chosen_actions, state_excess, action_excess, valid, proposed_actions, target_observation
 

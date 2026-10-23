@@ -141,7 +141,7 @@ def evaluate_model(
     wrapped_env: EnvWrapper,
     filter_prediction_points: bool = False,
 ):
-    safely_excitable_set = CartesianGridSet.from_system_name(system_name) if filter_prediction_points else None
+    safely_excitable_set = CartesianGridSet.from_system_name(system_name)[0] if filter_prediction_points else None
     prediction_metric_values = evaluate_model_prediction(
         wrapped_model,
         wrapped_env,

@@ -12,6 +12,8 @@ from admpe.utils.signals import aprbs, multisine
 from admpe.data_management import TESTING_TRAJECTORIES_ROOT
 from admpe.excitation.excitation_experiment_setup import SUPPORTED_SYSTEMS
 
+from admpe.sets import sample_from_set
+
 
 def aprbs_actions(key, n_steps, n_actions, **kwargs):
     return aprbs(n_steps=n_steps, batch_size=1, n_actions=n_actions, key=key, **kwargs)[0]
@@ -37,7 +39,7 @@ SIMPLE_TESTING_SIGNALS_ROOT = TESTING_TRAJECTORIES_ROOT / "simple_signals"
 SIMPLE_TESTING_SIGNALS_ROOT.mkdir(parents=True, exist_ok=True)
 
 
-def get_candidate_batch_function(env, params, penalty_function, data_key):
+def get_candidate_batch_function(env, params, penalty_function, data_key, safe_state_set):
     signal_function = SIGNALS[params["signal_name"]][0]
     n_steps = params["n_steps"]
 
@@ -50,9 +52,21 @@ def get_candidate_batch_function(env, params, penalty_function, data_key):
         if actions.shape != (n_steps, env.action_dim):
             raise ValueError("Signal generator returned an unexpected shape.")
 
-        # simulate sequence from random initial state
-        initial_state = env.init_state(state_key, deterministic_state=params["deterministic_initial_state"])
-        initial_observation = env.generate_observation(initial_state)
+        # simulate sequence from an initial state
+        if params["deterministic_initial_state"]:
+            initial_state = env.init_state(
+                state_key,
+                deterministic_state=params["deterministic_initial_state"],
+            )
+            initial_observation = env.generate_observation(initial_state)
+            initial_sample_ok = True
+        else:
+            sample_key, noise_key = jax.random.split(state_key)
+            initial_observation, initial_sample_ok = sample_from_set(sample_key, safe_state_set)
+            initial_state = env.generate_state_from_observation(
+                initial_observation,
+                key=noise_key,
+            )
         observations, _ = simulate_ahead_with_env(env, initial_observation, initial_state, actions)
 
         trajectory_penalties = penalty_function(x=observations, u=actions)
@@ -63,6 +77,7 @@ def get_candidate_batch_function(env, params, penalty_function, data_key):
         )
 
         valid = finite & (jnp.all(trajectory_penalties <= 0.0))
+        valid = valid & initial_sample_ok
         return observations, actions, trajectory_penalties, valid
 
     return jax.jit(jax.vmap(generate_candidate))

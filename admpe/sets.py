@@ -237,8 +237,72 @@ def get_safely_excitable_set_from_system_name(system_name):
 
     match system_name:
         case "fluid_tank":
-            return CartesianGridSet.from_path(SAFELY_EXCITABLE_SETS_ROOT / "fluid_tank_S_xu_666a769d-8c1b-4b.npz")
+            path = SAFELY_EXCITABLE_SETS_ROOT / "fluid_tank_S_xu_666a769d-8c1b-4b.npz"
         case "pendulum":
-            return CartesianGridSet.from_path(SAFELY_EXCITABLE_SETS_ROOT / "pendulum_S_xu_02430b86-ae0d-42.npz")
+            path = SAFELY_EXCITABLE_SETS_ROOT / "pendulum_S_xu_02430b86-ae0d-42.npz"
         case "cart_pole":
-            return CartesianGridSet.from_path(SAFELY_EXCITABLE_SETS_ROOT / "cart_pole_S_xu_8744b5d5-30e6-4b.npz")
+            path = SAFELY_EXCITABLE_SETS_ROOT / "cart_pole_S_xu_8744b5d5-30e6-4b.npz"
+    return CartesianGridSet.from_path(path), path
+
+
+def get_state_space_set(
+    safely_excitable_set: CartesianGridSet,
+    obs_dim: int,
+) -> CartesianGridSet:
+    """Project a state-action set onto its leading observation axes."""
+    if not 0 < obs_dim < safely_excitable_set.dim:
+        raise ValueError("Expected state axes followed by action axes.")
+
+    action_axes = tuple(range(obs_dim, safely_excitable_set.dim))
+
+    state_mask = np.any(
+        np.asarray(safely_excitable_set.mask),
+        axis=action_axes,
+    )
+
+    return CartesianGridSet(
+        axes=safely_excitable_set.axes[:obs_dim],
+        mask=state_mask,
+    )
+
+
+@eqx.filter_jit
+def sample_from_set(
+    key: jax.Array,
+    set: CartesianGridSet,
+    *,
+    max_attempts: int = 5000,
+):
+    """Return a continuous sample and a Boolean indicating success."""
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be positive.")
+
+    dtype = jnp.asarray(0.0).dtype
+    lower = jnp.stack([axis[0] for axis in set.axes]).astype(dtype)
+    upper = jnp.stack([axis[-1] for axis in set.axes]).astype(dtype)
+
+    def condition(carry):
+        _, _, accepted, attempts = carry
+        return (~accepted) & (attempts < max_attempts)
+
+    def draw(carry):
+        key, _, _, attempts = carry
+        key, draw_key = jax.random.split(key)
+
+        point = jax.random.uniform(
+            draw_key,
+            shape=(set.dim,),
+            dtype=dtype,
+            minval=lower,
+            maxval=upper,
+        )
+
+        return key, point, set.contains(point), attempts + 1
+
+    _, point, accepted, _ = jax.lax.while_loop(
+        condition,
+        draw,
+        (key, jnp.zeros_like(lower), jnp.array(False), jnp.array(0)),
+    )
+
+    return point, accepted

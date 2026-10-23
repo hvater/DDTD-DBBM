@@ -16,7 +16,7 @@ import numpy as np
 
 from admpe.data_management import write_metadata, TESTING_TRAJECTORIES_ROOT
 from admpe.excitation.excitation_experiment_setup import SUPPORTED_SYSTEMS, _SYSTEM_SETUP
-
+from admpe.sets import CartesianGridSet, get_state_space_set
 
 import optax
 
@@ -86,6 +86,10 @@ def setup_experiment(
         # if unknown:
         #     raise ValueError(f"Unknown OCP parameters: {sorted(unknown)}")
         # signal_params.update(overrides=ocp_overrides or {})
+
+        if signal_overrides is not None or ocp_overrides is not None:
+            raise NotImplementedError()
+
         if signal_params["n_starts"] < 1 or signal_params["n_opt_steps"] < 1:
             raise ValueError("OCP starts and optimization steps must be positive.")
 
@@ -132,9 +136,10 @@ def get_candidate_batch_function(
     penalty_function,
     featurize,
     data_key,
+    safe_state_set,
 ):
     if params["signal_name"] in simple.SUPPORTED_SIGNALS:
-        generate = simple.get_candidate_batch_function(env, params, penalty_function, data_key)
+        generate = simple.get_candidate_batch_function(env, params, penalty_function, data_key, safe_state_set)
 
         def batch(candidate_ids):
             observations, actions, penalties, valid = generate(candidate_ids)
@@ -165,6 +170,7 @@ def get_candidate_batch_function(
             ocp.loss_function,
             penalty_function,
             data_key,
+            safe_state_set,
             state_tolerance=params["signal_params"]["state_tolerance"],
             action_tolerance=params["signal_params"]["action_tolerance"],
         )
@@ -193,6 +199,14 @@ def get_candidate_batch_function(
         raise ValueError(f"The signal type '{params["signal_name"]}' is unknown.")
 
 
+def trajectory_is_safe(observations, actions, safely_excitable_set, safe_state_set):
+    pairs = jnp.concatenate([observations[..., :-1, :], actions], axis=-1)
+
+    pairs_valid = jnp.all(safely_excitable_set.contains(pairs), axis=-1)
+    terminal_state_valid = safe_state_set.contains(observations[..., -1, :])
+    return pairs_valid & terminal_state_valid
+
+
 def generate_testing_dataset(
     system_name,
     signal_name,
@@ -203,6 +217,7 @@ def generate_testing_dataset(
     batch_size,
     output_root,
     amplitude,
+    use_safely_excitable_set,
     deterministic_initial_state,
     noise_variance,
     max_attempts,
@@ -217,6 +232,12 @@ def generate_testing_dataset(
     if final_path.exists():
         raise FileExistsError(f"Dataset already exists: {final_path}")
     working_path.mkdir(exist_ok=False)
+
+    if use_safely_excitable_set:
+        safely_excitable_set, ses_path = CartesianGridSet.from_system_name(system_name)
+    else:
+        safely_excitable_set = None
+        ses_path = None
 
     if signal_name in ocp.SUPPORTED_SIGNALS:
         constraint_text = (
@@ -267,6 +288,7 @@ def generate_testing_dataset(
             tau=params["tau"],
             env_params=params["env_params"],
             environment_properties=params["environment_properties"],
+            safely_excitable_set_path=str(ses_path),
         )
 
         if signal_name == "ocp":
@@ -275,9 +297,14 @@ def generate_testing_dataset(
                 learning_rate_schedule="exponential_decay",
                 loss="mean_squared_feature_distance",
                 penalty_weight=1e3,
+                horizon_factor=params["signal_params"]["horizon_factor"],
             )
 
         write_metadata(working_path / "experiment.json", metadata)
+
+        safe_state_set = (
+            get_state_space_set(safely_excitable_set, env.obs_dim) if safely_excitable_set is not None else None
+        )
 
         batch_candidate_function = get_candidate_batch_function(
             env,
@@ -285,6 +312,7 @@ def generate_testing_dataset(
             penalty_function,
             featurize,
             data_key,
+            safe_state_set,
         )
 
         log.info("Starting dataset %s", exp_id)
@@ -300,6 +328,15 @@ def generate_testing_dataset(
             candidate_ids = np.arange(metadata["attempted"], metadata["attempted"] + count, dtype=np.uint32)
 
             fields, valid = batch_candidate_function(jnp.asarray(candidate_ids))
+
+            if safely_excitable_set is not None and safe_state_set is not None:
+                valid = valid & trajectory_is_safe(
+                    fields["observations"],
+                    fields["actions"],
+                    safely_excitable_set,
+                    safe_state_set,
+                )
+
             fields, valid = jax.device_get((fields, valid))
             valid = np.asarray(valid)
 
@@ -367,6 +404,7 @@ def run_testing_dataset_experiment(
     batch_size: int = 32,
     output_root: Path = TESTING_TRAJECTORIES_ROOT,
     *,
+    use_safely_excitable_set: bool = True,
     amplitude: float = 1.0,
     deterministic_initial_state: bool = False,
     noise_variance: float | None = 0.0,
@@ -428,6 +466,7 @@ def run_testing_dataset_experiment(
                 batch_size=batch_size,
                 output_root=output_root,
                 amplitude=amplitude,
+                use_safely_excitable_set=use_safely_excitable_set,
                 deterministic_initial_state=deterministic_initial_state,
                 noise_variance=noise_variance,
                 max_attempts=max_attempts,
