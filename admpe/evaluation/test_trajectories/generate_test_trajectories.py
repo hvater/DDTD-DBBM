@@ -49,7 +49,7 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--amplitude", type=float, default=1.0)
     parser.add_argument("--deterministic_initial_state", action="store_true")
-    parser.add_argument("--noise_variance", type=float, default=None)
+    parser.add_argument("--noise_variance", type=float, default=0.0)
     parser.add_argument("--max_attempts", type=int, default=None, help="Optional candidate cap per seed.")
     parser.add_argument("--output_root", type=Path, default=TESTING_TRAJECTORIES_ROOT)
     return parser.parse_args(argv)
