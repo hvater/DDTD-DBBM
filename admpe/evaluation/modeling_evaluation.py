@@ -17,6 +17,7 @@ from admpe.evaluation.modeling_metrics import (
     rollout_metrics,
 )
 from admpe.evaluation.model_wrapping import EnvWrapper, ModelWrapper, get_wrapped_model_and_env
+from admpe.sets import CartesianGridSet
 
 
 def load_corresponding_excitation_result(modeling_result):
@@ -48,11 +49,18 @@ def model_prediction(
     wrapped_env: EnvWrapper,
     validation_points: jax.Array | None = None,
     validation_points_per_dim: int | None = None,
+    *,
+    safely_excitable_set: CartesianGridSet | None = None,
 ):
     dim = wrapped_env.model.obs_dim + wrapped_env.model.action_dim
 
     if validation_points is None:
         validation_points = generate_default_prediction_validation_points(dim, validation_points_per_dim)
+    if safely_excitable_set is not None:
+        membership = safely_excitable_set.contains(validation_points)
+        validation_points = validation_points[membership]
+        if validation_points.shape[0] == 0:
+            raise ValueError("No validation points belong to the safely excitable set.")
 
     observations = validation_points[:, : wrapped_env.model.obs_dim]
     actions = validation_points[:, wrapped_env.model.obs_dim :]
@@ -69,8 +77,14 @@ def evaluate_model_prediction(
     validation_points: jax.Array | None = None,
     *,
     return_predictions: bool = False,
+    safely_excitable_set: CartesianGridSet | None = None,
 ):
-    pred, pred_gt = model_prediction(wrapped_model, wrapped_env, validation_points)
+    pred, pred_gt = model_prediction(
+        wrapped_model,
+        wrapped_env,
+        validation_points,
+        safely_excitable_set=safely_excitable_set,
+    )
 
     result = {"metrics": prediction_metrics(reference=pred_gt, prediction=pred)}
 
@@ -125,8 +139,14 @@ def evaluate_model(
     system_name: str,
     wrapped_model: ModelWrapper,
     wrapped_env: EnvWrapper,
+    filter_prediction_points: bool = False,
 ):
-    prediction_metric_values = evaluate_model_prediction(wrapped_model, wrapped_env)
+    safely_excitable_set = CartesianGridSet.from_system_name(system_name) if filter_prediction_points else None
+    prediction_metric_values = evaluate_model_prediction(
+        wrapped_model,
+        wrapped_env,
+        safely_excitable_set=safely_excitable_set,
+    )
 
     testing_data = load_testing_sequences(system_name, paths=None)
     rollout_metric_values = {}
@@ -161,6 +181,7 @@ def to_python(value):
 def update_modeling_df(
     df: pd.DataFrame,
     result_paths: list[pathlib.Path],
+    filter_prediction_points: bool = False,
 ):
     """Append new modeling experiments and fill in their excitation objectives.
 
@@ -176,6 +197,23 @@ def update_modeling_df(
         df = pd.DataFrame(columns=["exp_id"])
     else:
         df = df.copy()
+
+    prediction_domain = "safely_excitable" if filter_prediction_points else "full_box"
+
+    if not df.empty:
+        if "prediction_domain" not in df.columns:
+            raise ValueError(
+                "Existing results have no recorded prediction domain. "
+                "Recompute them or explicitly migrate verified legacy results."
+            )
+
+        domains = df["prediction_domain"]
+
+        if domains.isna().any() or not domains.eq(prediction_domain).all():
+            raise ValueError(
+                f"Existing results do not all use {prediction_domain!r}. "
+                "Use a separate dataframe for this evaluation domain."
+            )
 
     if "exp_id" not in df.columns:
         raise ValueError("The dataframe must contain an 'exp_id' column.")
@@ -213,7 +251,9 @@ def update_modeling_df(
         result = load_modeling_result(result_path)
 
         wrapped_model, wrapped_env = get_wrapped_model_and_env(result)
-        metrics_jax = evaluate_model(metadata["system_name"], wrapped_model, wrapped_env)
+        metrics_jax = evaluate_model(
+            metadata["system_name"], wrapped_model, wrapped_env, filter_prediction_points=filter_prediction_points
+        )
 
         metrics = to_python(metrics_jax)
 
@@ -226,6 +266,7 @@ def update_modeling_df(
             dataset_path=metadata["dataset_path"],
             excitation_objective=get_excitation_objective(metadata["dataset_path"]),
             use_f64=metadata.get("use_f64"),
+            prediction_domain=prediction_domain,
         )
 
         if row.keys() & metrics.keys():

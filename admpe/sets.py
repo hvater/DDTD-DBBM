@@ -8,6 +8,8 @@ import jax
 import jax.numpy as jnp
 import equinox as eqx
 
+from admpe.data_management import SAFELY_EXCITABLE_SETS_ROOT
+
 
 class CartesianGridSet(eqx.Module):
 
@@ -93,8 +95,12 @@ class CartesianGridSet(eqx.Module):
         )
 
     @staticmethod
-    def from_path(path):
+    def from_path(path: Path):
         return load_safely_excitable_set(path)
+
+    @staticmethod
+    def from_system_name(system_name: str):
+        return get_safely_excitable_set_from_system_name(system_name)
 
     def visualize(
         self,
@@ -225,3 +231,14 @@ def load_safely_excitable_set(path):
         axes = tuple(archive[f"axis_{i}"] for i in range(mask.ndim))
 
     return CartesianGridSet(axes, mask)
+
+
+def get_safely_excitable_set_from_system_name(system_name):
+
+    match system_name:
+        case "fluid_tank":
+            return CartesianGridSet.from_path(SAFELY_EXCITABLE_SETS_ROOT / "fluid_tank_S_xu_666a769d-8c1b-4b.npz")
+        case "pendulum":
+            return CartesianGridSet.from_path(SAFELY_EXCITABLE_SETS_ROOT / "pendulum_S_xu_02430b86-ae0d-42.npz")
+        case "cart_pole":
+            return CartesianGridSet.from_path(SAFELY_EXCITABLE_SETS_ROOT / "cart_pole_S_xu_8744b5d5-30e6-4b.npz")
