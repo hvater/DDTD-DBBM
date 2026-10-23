@@ -4,6 +4,7 @@ from copy import deepcopy
 
 import jax
 import jax.numpy as jnp
+import equinox as eqx
 
 import exciting_environments as excenvs
 
@@ -300,9 +301,23 @@ def setup_algorithm_parameterization(
     return params, proposed_actions, loader_key, expl_key, process_noise_key
 
 
-def setup_environment(system_name):
+def setup_environment(system_name: str, noise_variance: float | None = None):
     setup_env, model_class = _SYSTEM_SETUP[system_name]
     env, penalty_function, featurize, env_params = setup_env()
+
+    # After constructing the environment:
+    if noise_variance is not None:
+        if noise_variance < 0:
+            raise ValueError("noise_variance must be nonnegative.")
+
+        env = eqx.tree_at(
+            lambda environment: environment.process_noise_variance,
+            env,
+            float(noise_variance),
+        )
+
+    env_params = env_params.copy()
+    env_params["process_noise_variance"] = float(env.process_noise_variance)
 
     return env, penalty_function, featurize, env_params, model_class
 
@@ -359,6 +374,7 @@ def setup_experiment(
     model_type: str,
     seed: int,
     n_time_steps: int,
+    noise_variance: float,
     *,
     alg_overrides=None,
     model_trainer_overrides=None,
@@ -372,7 +388,7 @@ def setup_experiment(
     """
     validate_experiment(system_name, excitation_objective, model_type, n_time_steps)
 
-    env, penalty_function, featurize, env_params, model_class = setup_environment(system_name)
+    env, penalty_function, featurize, env_params, model_class = setup_environment(system_name, noise_variance)
 
     params, proposed_actions, loader_key, expl_key, process_noise_key = setup_algorithm_parameterization(
         seed,
