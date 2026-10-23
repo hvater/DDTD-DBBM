@@ -22,7 +22,7 @@ from admpe.evaluation.modeling_metrics import (
     rollout_metrics,
 )
 from admpe.evaluation.model_wrapping import EnvWrapper, ModelWrapper, get_wrapped_model_and_env
-from admpe.sets import CartesianGridSet
+from admpe.sets import SafelyExcitableSet
 
 
 def load_corresponding_excitation_result(modeling_result):
@@ -55,7 +55,7 @@ def model_prediction(
     validation_points: jax.Array | None = None,
     validation_points_per_dim: int | None = None,
     *,
-    safely_excitable_set: CartesianGridSet | None = None,
+    safely_excitable_set: SafelyExcitableSet | None = None,
 ):
     dim = wrapped_env.model.obs_dim + wrapped_env.model.action_dim
 
@@ -82,7 +82,7 @@ def evaluate_model_prediction(
     validation_points: jax.Array | None = None,
     *,
     return_predictions: bool = False,
-    safely_excitable_set: CartesianGridSet | None = None,
+    safely_excitable_set: SafelyExcitableSet | None = None,
 ):
     pred, pred_gt = model_prediction(
         wrapped_model,
@@ -146,7 +146,7 @@ def evaluate_model(
     wrapped_env: EnvWrapper,
     filter_testing_points: bool = False,
 ):
-    safely_excitable_set = CartesianGridSet.from_system_name(system_name)[0] if filter_testing_points else None
+    safely_excitable_set = SafelyExcitableSet.from_system_name(system_name)[0] if filter_testing_points else None
     prediction_metric_values = evaluate_model_prediction(
         wrapped_model,
         wrapped_env,

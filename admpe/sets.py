@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Self
 
 from pathlib import Path
 
@@ -89,18 +89,24 @@ class CartesianGridSet(eqx.Module):
 
         assert self.mask.shape == other.mask.shape, ("The unflattened shape of the Sets must be the same.",)
 
-        return CartesianGridSet(
+        return self.__class__(
             axes=self.axes,
             mask=jnp.logical_and(self.mask, other.mask),
         )
 
-    @staticmethod
-    def from_path(path: Path):
-        return load_safely_excitable_set(path)
+    @classmethod
+    def from_path(cls, path: Path | str) -> Self:
+        with np.load(Path(path), allow_pickle=False) as archive:
+            if archive["format_version"].item() != 1:
+                raise ValueError("Unsupported set format version.")
 
-    @staticmethod
-    def from_system_name(system_name: str):
-        return get_safely_excitable_set_from_system_name(system_name)
+            mask = archive["mask"]
+            axes = tuple(archive[f"axis_{i}"] for i in range(mask.ndim))
+
+        return cls(axes, mask)
+
+    def sample(self, key, *, max_attempts=5000):
+        return sample_from_set(key, self, max_attempts=max_attempts)
 
     def visualize(
         self,
@@ -220,52 +226,6 @@ class CartesianGridSet(eqx.Module):
         return fig, axs
 
 
-def load_safely_excitable_set(path):
-    """Load a compact archive and transfer its arrays to JAX."""
-    with np.load(Path(path), allow_pickle=False) as archive:
-        if archive["format_version"].item() != 1:
-            raise ValueError("Unsupported set format version.")
-
-        mask = archive["mask"]
-
-        axes = tuple(archive[f"axis_{i}"] for i in range(mask.ndim))
-
-    return CartesianGridSet(axes, mask)
-
-
-def get_safely_excitable_set_from_system_name(system_name):
-
-    match system_name:
-        case "fluid_tank":
-            path = SAFELY_EXCITABLE_SETS_ROOT / "fluid_tank_S_xu_666a769d-8c1b-4b.npz"
-        case "pendulum":
-            path = SAFELY_EXCITABLE_SETS_ROOT / "pendulum_S_xu_02430b86-ae0d-42.npz"
-        case "cart_pole":
-            path = SAFELY_EXCITABLE_SETS_ROOT / "cart_pole_S_xu_8744b5d5-30e6-4b.npz"
-    return CartesianGridSet.from_path(path), path
-
-
-def get_state_space_set(
-    safely_excitable_set: CartesianGridSet,
-    obs_dim: int,
-) -> CartesianGridSet:
-    """Project a state-action set onto its leading observation axes."""
-    if not 0 < obs_dim < safely_excitable_set.dim:
-        raise ValueError("Expected state axes followed by action axes.")
-
-    action_axes = tuple(range(obs_dim, safely_excitable_set.dim))
-
-    state_mask = np.any(
-        np.asarray(safely_excitable_set.mask),
-        axis=action_axes,
-    )
-
-    return CartesianGridSet(
-        axes=safely_excitable_set.axes[:obs_dim],
-        mask=state_mask,
-    )
-
-
 @eqx.filter_jit
 def sample_from_set(
     key: jax.Array,
@@ -306,3 +266,43 @@ def sample_from_set(
     )
 
     return point, accepted
+
+
+class SafelyExcitableSet(CartesianGridSet):
+
+    @classmethod
+    def from_system_name(cls, system_name: str) -> Self:
+        filenames = {
+            "fluid_tank": "fluid_tank_S_xu_666a769d-8c1b-4b.npz",
+            "pendulum": "pendulum_S_xu_02430b86-ae0d-42.npz",
+            "cart_pole": "cart_pole_S_xu_8744b5d5-30e6-4b.npz",
+        }
+        filename = filenames[system_name]
+
+        path = SAFELY_EXCITABLE_SETS_ROOT / filename
+        return cls.from_path(path), path
+
+
+class SafeStateSet(CartesianGridSet):
+
+    @classmethod
+    def from_safely_excitable_set(
+        cls,
+        safely_excitable_set: SafelyExcitableSet,
+        obs_dim: int,
+    ) -> Self:
+
+        if not 0 < obs_dim < safely_excitable_set.dim:
+            raise ValueError("Expected state axes followed by action axes.")
+
+        action_axes = tuple(range(obs_dim, safely_excitable_set.dim))
+
+        state_mask = np.any(
+            np.asarray(safely_excitable_set.mask),
+            axis=action_axes,
+        )
+
+        return cls(
+            axes=safely_excitable_set.axes[:obs_dim],
+            mask=state_mask,
+        )

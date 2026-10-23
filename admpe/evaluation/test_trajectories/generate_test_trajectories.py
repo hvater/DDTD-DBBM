@@ -16,7 +16,7 @@ import numpy as np
 
 from admpe.data_management import write_metadata, TESTING_TRAJECTORIES_ROOT
 from admpe.excitation.excitation_experiment_setup import SUPPORTED_SYSTEMS, _SYSTEM_SETUP
-from admpe.sets import CartesianGridSet, get_state_space_set
+from admpe.sets import SafelyExcitableSet, SafeStateSet
 
 import optax
 
@@ -234,7 +234,7 @@ def generate_testing_dataset(
     working_path.mkdir(exist_ok=False)
 
     if use_safely_excitable_set:
-        safely_excitable_set, ses_path = CartesianGridSet.from_system_name(system_name)
+        safely_excitable_set, ses_path = SafelyExcitableSet.from_system_name(system_name)
     else:
         safely_excitable_set = None
         ses_path = None
@@ -303,7 +303,9 @@ def generate_testing_dataset(
         write_metadata(working_path / "experiment.json", metadata)
 
         safe_state_set = (
-            get_state_space_set(safely_excitable_set, env.obs_dim) if safely_excitable_set is not None else None
+            SafeStateSet.from_safely_excitable_set(safely_excitable_set, env.obs_dim)
+            if safely_excitable_set is not None
+            else None
         )
 
         batch_candidate_function = get_candidate_batch_function(
