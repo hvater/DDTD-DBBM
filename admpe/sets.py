@@ -1,6 +1,8 @@
-from pathlib import Path
-import json
+from typing import Callable
 
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -93,6 +95,123 @@ class CartesianGridSet(eqx.Module):
     @staticmethod
     def from_path(path):
         return load_safely_excitable_set(path)
+
+    def visualize(
+        self,
+        reduction_method: Callable = jnp.sum,
+        labels: None | list[str] = None,
+        use_contourf: bool = True,
+        grid_spacing: float = 0.0,
+    ):
+        dim = self.dim
+        coordinates = [np.asarray(axis) for axis in self.axes]
+
+        if labels is None:
+            labels = [str(i) for i in range(dim)]
+
+        if len(labels) != dim:
+            raise ValueError(f"Expected {dim} labels")
+
+        if grid_spacing < 0:
+            raise ValueError("grid_spacing must be nonnegative")
+
+        def draw_plane(ax, x_dimension, y_dimension, values):
+            x_coordinates = coordinates[x_dimension]
+            y_coordinates = coordinates[y_dimension]
+            values = np.asarray(values)
+
+            if use_contourf:
+                ax.contourf(
+                    x_coordinates,
+                    y_coordinates,
+                    values,
+                )
+            else:
+                ax.pcolormesh(
+                    x_coordinates,
+                    y_coordinates,
+                    values,
+                    shading="nearest",
+                )
+
+            ax.set_xlim(
+                x_coordinates[0] - grid_spacing,
+                x_coordinates[-1] + grid_spacing,
+            )
+            ax.set_ylim(
+                y_coordinates[0] - grid_spacing,
+                y_coordinates[-1] + grid_spacing,
+            )
+            ax.grid(True)
+
+        if dim == 1:
+            fig, ax = plt.subplots(figsize=(9, 9))
+
+            ax.plot(coordinates[0], np.asarray(self.mask))
+            ax.set_xlabel(labels[0])
+            ax.set_ylabel("Membership")
+            ax.grid(True)
+
+            fig.tight_layout()
+            return fig, ax
+
+        if dim == 2:
+            fig, ax = plt.subplots(figsize=(9, 9))
+
+            draw_plane(ax, 0, 1, self.mask.T)
+
+            ax.set_xlabel(labels[0])
+            ax.set_ylabel(labels[1])
+
+            fig.tight_layout()
+            return fig, ax
+
+        fig, axs = plt.subplots(
+            nrows=dim,
+            ncols=dim,
+            figsize=(9, 9),
+            sharex="col",
+            sharey="row",
+        )
+
+        for row in range(dim):
+            for column in range(dim):
+                ax = axs[row, column]
+                ax.grid(True)
+
+                # Leave diagonal panels empty.
+                if row == column:
+                    continue
+
+                reduction_axes = []
+
+                for dimension in range(dim):
+                    if dimension != column and dimension != row:
+                        reduction_axes.append(dimension)
+
+                values = reduction_method(
+                    self.mask,
+                    axis=tuple(reduction_axes),
+                )
+
+                # Reduction preserves the original dimension order.
+                # Plotting requires [vertical_index, horizontal_index].
+                if column < row:
+                    values = values.T
+
+                draw_plane(
+                    ax,
+                    x_dimension=column,
+                    y_dimension=row,
+                    values=values,
+                )
+
+        for dimension in range(dim):
+            axs[-1, dimension].set_xlabel(labels[dimension])
+            axs[dimension, 0].set_ylabel(labels[dimension])
+
+        fig.tight_layout()
+        return fig, axs
 
 
 def load_safely_excitable_set(path):
