@@ -50,6 +50,9 @@ TESTING_TRAJECTORIES_ROOT.mkdir(parents=True, exist_ok=True)
 VALIDATION_TRAJECTORIES_ROOT = Path(__file__).resolve().parent.parent / "data" / "validation_trajectories"
 VALIDATION_TRAJECTORIES_ROOT.mkdir(parents=True, exist_ok=True)
 
+SAFELY_EXCITABLE_SETS_ROOT = Path(__file__).resolve().parent.parent / "data" / "safely_excitable_sets"
+SAFELY_EXCITABLE_SETS_ROOT.mkdir(parents=True, exist_ok=True)
+
 
 def _json_value(value):
     """Record arrays and configuration objects without pickling executable code."""
