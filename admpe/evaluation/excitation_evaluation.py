@@ -136,7 +136,7 @@ def evaluate_excitation_result(
     actions: jax.Array,
     *,
     filter_testing_points: bool = True,
-    points_per_dim: int = 10,
+    points_per_dim: int = 15,
     bound_tolerance: float = 1e-4,
     coverage_radius: float = 0.1,
 ):
@@ -331,3 +331,54 @@ def update_excitation_df(
         [df, new_df_entries],
         ignore_index=True,
     )
+
+
+def evaluate_excitation_history(df, *, n_checkpoints=20):
+    """Return one row per excitation run and evaluated checkpoint."""
+    if n_checkpoints < 2:
+        raise ValueError("n_checkpoints must be at least two.")
+
+    rows = []
+
+    for _, run in tqdm.tqdm(df.iterrows(), total=df.shape[0]):
+        domain = run["evaluation.domain"]
+        if domain not in {"safely_excitable", "full_box"}:
+            raise ValueError(f"Unknown evaluation domain: {domain!r}")
+
+        with np.load(
+            pathlib.Path(run["path"]) / "trajectory.npz",
+            allow_pickle=False,
+        ) as data:
+            observations = data["observations"]
+            actions = data["actions"]
+
+        if len(actions) == 0:
+            raise ValueError(f"No excitation steps in {run['exp_id']}")
+
+        # More checkpoints early on, while retaining the final step.
+        checkpoints = np.unique(np.rint(np.geomspace(1, len(actions), n_checkpoints)).astype(int))
+
+        for k in checkpoints:
+            result = evaluate_excitation_result(
+                system_name=run["system_name"],
+                observations=observations[: k + 1],
+                actions=actions[:k],
+                filter_testing_points=domain == "safely_excitable",
+                points_per_dim=int(run["evaluation.points_per_dim"]),
+            )
+
+            rows.append(
+                {
+                    "exp_id": run["exp_id"],
+                    "system_name": run["system_name"],
+                    "model_type": run["model_type"],
+                    "excitation_objective": run["excitation_objective"],
+                    "excitation_seed": run["excitation_seed"],
+                    "n_steps": int(k),
+                    "validity.all_finite": result["validity"]["all_finite"],
+                    "state_coverage.diced_fill": result["state_coverage"]["diced_fill"],
+                    "state_action_coverage.diced_fill": result["state_action_coverage"]["diced_fill"],
+                }
+            )
+
+    return pd.DataFrame.from_records(rows)

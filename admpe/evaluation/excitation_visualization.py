@@ -1,11 +1,235 @@
 from itertools import combinations
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 
 import jax.numpy as jnp
 
 from dmpe.evaluation.plotting_utils import plot_feature_combinations
 from dmpe.utils.density_estimation import DensityEstimate
+
+
+def visualize_excitation_metric_boxplots(
+    df,
+    *,
+    log_scale: bool = False,
+    figure_width: float = 6.0,
+    hide_outliers: bool = False,
+):
+    """Plot diced fill by excitation model and objective for each system.
+
+    Points represent individual excitation runs.
+    Counts show n=finite/total, including nonfinite runs in the denominator.
+    Returns {system_name: (figure, axes)}.
+    """
+    metrics = {
+        "state_coverage.diced_fill": "State coverage",
+        "state_action_coverage.diced_fill": "State-action coverage",
+    }
+    required = {"system_name", "model_type", "excitation_objective", *metrics}
+    missing = required.difference(df.columns)
+    if missing:
+        raise ValueError(f"Missing dataframe columns: {sorted(missing)}")
+
+    objectives = sorted(df["excitation_objective"].dropna().unique())
+    colors = plt.get_cmap("tab10")
+    objective_colors = {name: colors(i % colors.N) for i, name in enumerate(objectives)}
+    figures = {}
+
+    for system_name, system_df in df.groupby("system_name", sort=True):
+        model_types = sorted(system_df["model_type"].dropna().unique())
+        system_objectives = [name for name in objectives if name in system_df["excitation_objective"].values]
+        if not model_types or not system_objectives:
+            continue
+
+        fig, axes = plt.subplots(
+            1,
+            len(metrics),
+            figsize=(figure_width, 3.5),
+            squeeze=False,
+            constrained_layout=True,
+        )
+        axes = axes[0]
+        box_width = 0.8 / len(system_objectives)
+
+        for ax, (metric, label) in zip(axes, metrics.items()):
+            for model_index, model_type in enumerate(model_types):
+                for objective_index, objective in enumerate(system_objectives):
+                    group = system_df.loc[
+                        system_df["model_type"].eq(model_type) & system_df["excitation_objective"].eq(objective),
+                        metric,
+                    ]
+                    values = group.to_numpy(dtype=float, na_value=np.nan)
+                    values = values[np.isfinite(values)]
+
+                    if log_scale and np.any(values <= 0):
+                        raise ValueError(f"Logarithmic plots require positive {metric} values for {system_name}.")
+
+                    position = model_index + (objective_index - (len(system_objectives) - 1) / 2) * box_width
+                    color = objective_colors[objective]
+
+                    if values.size:
+                        ax.boxplot(
+                            [values],
+                            positions=[position],
+                            widths=box_width * 0.8,
+                            patch_artist=True,
+                            manage_ticks=False,
+                            boxprops={
+                                "facecolor": color,
+                                "edgecolor": color,
+                                "alpha": 0.5,
+                            },
+                            whiskerprops={"color": color},
+                            capprops={"color": color},
+                            medianprops={"color": "black", "linewidth": 1.5},
+                            showfliers=not hide_outliers,
+                        )
+
+                        if hide_outliers:
+                            offsets = (
+                                np.linspace(-0.2, 0.2, values.size) * box_width if values.size > 1 else np.zeros(1)
+                            )
+                            ax.scatter(
+                                position + offsets,
+                                values,
+                                s=18,
+                                color=color,
+                                edgecolors="white",
+                                linewidths=0.4,
+                                zorder=3,
+                            )
+
+                    ax.text(
+                        position,
+                        0.98,
+                        f"n={values.size}/{len(group)}",
+                        transform=ax.get_xaxis_transform(),
+                        ha="center",
+                        va="top",
+                        fontsize=7,
+                        color=color,
+                    )
+            if log_scale:
+                ax.set_yscale("log")
+            ax.set_title(label)
+            ax.set_xlabel("Model used for excitation")
+            ax.set_xticks(
+                range(len(model_types)),
+                [m.replace("_", " ") for m in model_types],
+            )
+            ax.set_xlim(-0.5, len(model_types) - 0.5)
+            ax.margins(y=0.25)
+            ax.grid(True, alpha=0.4)
+            ax.set_axisbelow(True)
+
+        axes[0].set_ylabel("Diced fill (lower is better)")
+        fig.suptitle(system_name.replace("_", " ").title(), fontsize=16)
+        fig.legend(
+            handles=[
+                Patch(
+                    facecolor=objective_colors[name],
+                    alpha=0.5,
+                    label=name.replace("_", " "),
+                )
+                for name in system_objectives
+            ],
+            title="Excitation objective",
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.02),
+            ncol=min(2, len(system_objectives)),
+            fontsize=8,
+            frameon=False,
+        )
+        figures[system_name] = (fig, axes)
+
+    return figures
+
+
+def visualize_excitation_history(
+    history,
+    *,
+    figure_width=6.0,
+):
+    """Return {(system_name, model_type): (figure, axes)}."""
+    metrics = {
+        "state_coverage.diced_fill": "State coverage",
+        "state_action_coverage.diced_fill": "State-action coverage",
+    }
+
+    objectives = sorted(history["excitation_objective"].dropna().unique())
+    cmap = plt.get_cmap("tab10")
+    colors = {name: cmap(i % cmap.N) for i, name in enumerate(objectives)}
+    figures = {}
+
+    for (system_name, model_type), system_df in history.groupby(
+        ["system_name", "model_type"],
+        sort=True,
+    ):
+        fig, axes = plt.subplots(
+            1,
+            2,
+            figsize=(figure_width, 3.5),
+            constrained_layout=True,
+        )
+
+        for objective, group in system_df.groupby(
+            "excitation_objective",
+            sort=True,
+        ):
+            color = colors[objective]
+            n_runs = group["exp_id"].nunique()
+
+            final = group.sort_values("n_steps").groupby("exp_id").tail(1)
+            n_finite = int(final["validity.all_finite"].sum())
+            label = f"{objective.replace('_', ' ')} " f"({n_finite}/{n_runs} finite at end)"
+
+            for ax, (metric, title) in zip(axes, metrics.items()):
+                for _, run in group.groupby("exp_id"):
+                    run = run.sort_values("n_steps")
+                    ax.plot(
+                        run["n_steps"],
+                        1 - run[metric],
+                        color=color,
+                        alpha=0.2,
+                        lw=0.8,
+                    )
+
+                summary = group.groupby("n_steps")[metric].agg(["median", "count"])
+
+                # Require contributions from every run.
+                median = summary["median"].where(summary["count"].eq(n_runs))
+                ax.plot(
+                    summary.index,
+                    1 - median,
+                    color=color,
+                    lw=2,
+                    label=label,
+                )
+                ax.set_title(title)
+
+        for ax in axes:
+            ax.set_xlabel("Excitation steps")
+            ax.set_ylim(-0.02, 1.02)
+            ax.grid(True, alpha=0.4)
+
+        axes[0].set_ylabel("Covered-cell fraction")
+        fig.suptitle(f"{system_name.replace('_', ' ').title()} | " f"{model_type.replace('_', ' ')}")
+
+        handles, labels = axes[0].get_legend_handles_labels()
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.02),
+            ncol=min(2, len(labels)),
+            fontsize=8,
+            frameon=False,
+        )
+
+        figures[system_name, model_type] = (fig, axes)
+
+    return figures
 
 
 def shared_density_levels(runs, *, view="achieved", n_levels=21, per_pair=False):
