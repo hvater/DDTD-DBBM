@@ -270,6 +270,8 @@ def visualize_model_rollouts(
 
     pred_observations = pred_observations[:, :max_trajectory_length, :]
     feat_observations = feat_observations[:, :max_trajectory_length, :]
+    if observations.shape[1] <= max_trajectory_length:
+        actions = actions[:, : max_trajectory_length - 1, :]
 
     n_trajectories, n_observations, obs_dim = feat_observations.shape
     action_dim = actions.shape[-1]
