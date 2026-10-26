@@ -190,7 +190,7 @@ def to_python(value):
 def update_modeling_df(
     df: pd.DataFrame,
     result_paths: list[pathlib.Path],
-    filter_prediction_points: bool = False,
+    filter_testing_points: bool = False,
 ):
     """Append new modeling experiments and fill in their excitation objectives.
 
@@ -207,7 +207,7 @@ def update_modeling_df(
     else:
         df = df.copy()
 
-    prediction_domain = "safely_excitable" if filter_prediction_points else "full_box"
+    prediction_domain = "safely_excitable" if filter_testing_points else "full_box"
 
     if not df.empty:
         if "prediction_domain" not in df.columns:
@@ -261,7 +261,7 @@ def update_modeling_df(
 
         wrapped_model, wrapped_env = get_wrapped_model_and_env(result)
         metrics_jax = evaluate_model(
-            metadata["system_name"], wrapped_model, wrapped_env, filter_prediction_points=filter_prediction_points
+            metadata["system_name"], wrapped_model, wrapped_env, filter_testing_points=filter_testing_points
         )
 
         metrics = to_python(metrics_jax)
