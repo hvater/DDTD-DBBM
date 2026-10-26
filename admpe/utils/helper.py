@@ -1,4 +1,5 @@
 import numpy as np
+import jax
 import equinox as eqx
 import jax.numpy as jnp
 
@@ -18,6 +19,19 @@ def convert_lists(x):
     if isinstance(x, tuple):
         return tuple(convert_lists(v) for v in x)
     return x
+
+
+def to_python(value):
+    """Transforms all jax arrays to floats or lists for storing in the results df."""
+
+    if isinstance(value, dict):
+        return {key: to_python(item) for key, item in value.items()}
+
+    if isinstance(value, jax.Array):
+        array = np.asarray(value)
+        return float(array.item()) if array.ndim == 0 else array.tolist()
+
+    return value
 
 
 def pprint_helper(x):

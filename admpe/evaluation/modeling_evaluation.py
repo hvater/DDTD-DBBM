@@ -10,6 +10,7 @@ import equinox as eqx
 
 from dmpe.utils.density_estimation import build_grid
 
+from admpe.utils.helper import to_python
 from admpe.data_management import (
     load_excitation_result,
     load_modeling_result,
@@ -172,19 +173,6 @@ def evaluate_model(
     }
 
     return result
-
-
-def to_python(value):
-    """Transforms all jax arrays to floats or lists for storing in the results df."""
-
-    if isinstance(value, dict):
-        return {key: to_python(item) for key, item in value.items()}
-
-    if isinstance(value, jax.Array):
-        array = np.asarray(value)
-        return float(array.item()) if array.ndim == 0 else array.tolist()
-
-    return value
 
 
 def update_modeling_df(

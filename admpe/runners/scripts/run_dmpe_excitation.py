@@ -10,6 +10,8 @@ from admpe.runners.excitation_experiment import run_excitation_experiment
 if __name__ == "__main__":
 
     for system_name in ["fluid_tank", "pendulum", "cart_pole"]:  # [, "pendulum", "cart_pole"]:
+
+        raise
         for excitation_objective in [
             "dmpe_static_dynamics",
             "dmpe_uniform",
@@ -22,7 +24,8 @@ if __name__ == "__main__":
                 system_name=system_name,
                 excitation_objective=excitation_objective,
                 gpu_id=2,
-                exp_name="state_only_run5",
+                exp_name="state_only_run5_long",
+                n_time_steps=15_000,
                 seeds=np.arange(0, 5, 1).tolist(),
                 alg_overrides={"consider_action_distribution": False},
             )

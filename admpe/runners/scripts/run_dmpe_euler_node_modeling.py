@@ -9,7 +9,7 @@ from admpe.runners.modeling_experiment import run_modeling_experiment
 
 if __name__ == "__main__":
 
-    exp_name = "state_only_run5"
+    exp_name = "state_only_pm_no_noise"
 
     for system_name in ["fluid_tank", "pendulum", "cart_pole"]:
 
@@ -23,8 +23,9 @@ if __name__ == "__main__":
         run_modeling_experiment(
             system_name=system_name,
             dataset_paths=dataset_paths,
-            model_type="neural_euler_tiny_10",
-            gpu_id=0,
-            exp_name="testing_adaptive_model_params",
+            model_type="neural_euler",
+            gpu_id=2,
+            exp_name="state_only_pm_no_noise",
             seeds=np.arange(0, 5, 1).tolist(),
+            perform_validation=False,
         )
