@@ -1,11 +1,21 @@
+from functools import lru_cache
+
 import json
 import pathlib
 
+import numpy as np
 import pandas as pd
 import tqdm
+from scipy.spatial import cKDTree
+
+import jax
+import jax.numpy as jnp
 
 from admpe.utils.helper import to_python
 from admpe.data_management import list_modeling_results, load_modeling_result, load_excitation_result
+from admpe.sets import SafeStateSet, SafelyExcitableSet
+from dmpe.utils.density_estimation import build_grid
+from dmpe.utils.metrics import diced_fill
 
 
 def load_corresponding_modeling_results(
@@ -65,8 +75,179 @@ def load_excitation_comparison(excitation_results_overview, *, objectives, seed)
     return {objective: load_excitation_result(path) for objective, path in selected_paths.items()}
 
 
-def evaluate_excitation_result(system_name, observations, actions):
-    return {"test_metrics": 0.0}
+def evaluate_finite_data(observations, actions):
+    finite_observations = np.isfinite(observations).all(axis=1)
+    finite_actions = np.isfinite(actions).all(axis=1)
+    finite_transitions = finite_observations[:-1] & finite_actions & finite_observations[1:]
+    all_finite = bool(finite_observations.all() and finite_actions.all())
+
+    return finite_observations, finite_actions, finite_transitions, all_finite
+
+
+@lru_cache(maxsize=12)
+def get_sets_and_eval_helpers(system_name, obs_dim, action_dim, points_per_dim, filter_testing_points):
+    safely_excitable_set, set_path = SafelyExcitableSet.from_system_name(system_name)
+    safe_state_set = SafeStateSet.from_safely_excitable_set(safely_excitable_set, obs_dim)
+
+    state_grid = np.asarray(build_grid(obs_dim, -1.0, 1.0, points_per_dim))
+    joint_grid = np.asarray(build_grid(obs_dim + action_dim, -1.0, 1.0, points_per_dim))
+    half_width = float(np.abs(joint_grid[1, -1] - joint_grid[0, -1]) / 2)
+
+    if filter_testing_points:
+        state_grid = state_grid[np.asarray(safe_state_set.contains(state_grid))]
+        joint_grid = joint_grid[np.asarray(safely_excitable_set.contains(joint_grid))]
+    if len(state_grid) == 0 or len(joint_grid) == 0:
+        raise ValueError("The selected grid has no reference points in the evaluation domain.")
+
+    return safe_state_set, safely_excitable_set, state_grid, joint_grid, str(set_path), half_width
+
+
+_diced_fill_block = jax.jit(diced_fill)
+
+
+def _blocked_diced_fill(samples, reference, half_width, *, block_size=256):
+    """Evaluate the existing empty-cell fraction in bounded support blocks.
+
+    Weight each block by its support count so a shorter final block has the
+    correct contribution.
+    """
+    if len(reference) == 0:
+        raise ValueError("Diced fill needs at least one support point.")
+    if not np.isfinite(half_width) or half_width <= 0:
+        raise ValueError("Diced fill half-width must be positive and finite.")
+    if isinstance(block_size, bool) or not isinstance(block_size, int) or block_size < 1:
+        raise ValueError("block_size must be a positive integer.")
+
+    samples = jnp.asarray(samples)
+    reference = jnp.asarray(reference)
+    half_width = jnp.asarray(half_width)
+
+    weighted_empty_fraction = 0.0
+    for start in range(0, len(reference), block_size):
+        block = reference[start : start + block_size]
+        weighted_empty_fraction += float(_diced_fill_block(samples, block, half_width)) * len(block)
+
+    return float(np.clip(weighted_empty_fraction / len(reference), 0.0, 1.0))
+
+
+def evaluate_excitation_result(
+    system_name: bool,
+    observations: jax.Array,
+    actions: jax.Array,
+    *,
+    filter_testing_points: bool = True,
+    points_per_dim: int = 10,
+    bound_tolerance: float = 1e-4,
+    coverage_radius: float = 0.1,
+):
+
+    observations = np.asarray(observations, dtype=float)
+    actions = np.asarray(actions, dtype=float)
+    if observations.ndim != 2 or actions.ndim != 2:
+        raise ValueError("Expected (time, features) observation and action arrays.")
+    if len(actions) == 0 or len(observations) != len(actions) + 1:
+        raise ValueError("Need at least one action and exactly one more observation than action.")
+    if observations.shape[1] == 0 or actions.shape[1] == 0:
+        raise ValueError("Observation and action feature dimensions must be nonempty.")
+
+    obs_dim = observations.shape[-1]
+    act_dim = actions.shape[-1]
+
+    finite_observations, finite_actions, finite_transitions, all_finite = evaluate_finite_data(observations, actions)
+
+    joint_samples = np.concatenate([observations[:-1], actions], axis=-1)
+
+    safe_state_set, safely_excitable_set, state_grid, joint_grid, set_path, half_width = get_sets_and_eval_helpers(
+        system_name,
+        obs_dim,
+        act_dim,
+        points_per_dim,
+        filter_testing_points,
+    )
+
+    def first_invalid(finite):
+        indices = np.flatnonzero(~finite)
+        return int(indices[0]) if indices.size else None
+
+    def describe(values, finite):
+        valid_values = values[finite]
+        return {
+            "n_samples": int(len(values)),
+            "n_finite": int(finite.sum()),
+            "nonfinite_fraction": float((~finite).mean()),
+            "first_nonfinite_index": first_invalid(finite),
+            "outside_box_fraction_of_finite": (
+                float((np.abs(valid_values) > 1.0 + bound_tolerance).any(axis=1).mean())
+                if len(valid_values)
+                else float("nan")
+            ),
+            "max_box_excess": (
+                float(np.maximum(np.abs(valid_values) - 1.0, 0.0).max()) if len(valid_values) else float("nan")
+            ),
+            "min_per_feature": valid_values.min(axis=0).tolist() if len(valid_values) else [None] * values.shape[1],
+            "max_per_feature": valid_values.max(axis=0).tolist() if len(valid_values) else [None] * values.shape[1],
+        }
+
+    def not_safe_fraction(values, finite, domain):
+        valid_values = values[finite]
+        return float((~np.asarray(domain.contains(valid_values))).mean()) if len(valid_values) else float("nan")
+
+    def coverage(samples, reference, domain):
+        # A partial valid prefix is not scored as a successful complete run.
+        if not all_finite:
+            samples = samples[:0]
+        elif filter_testing_points:
+            samples = samples[np.asarray(domain.contains(samples))]
+        else:
+            samples = samples[(np.abs(samples) <= 1.0).all(axis=1)]
+
+        distances = cKDTree(samples).query(reference, k=1)[0] if len(samples) else None
+
+        return {
+            "n_samples_in_domain": int(len(samples)),
+            "n_reference_points": int(len(reference)),
+            "mean_nearest_distance": float(distances.mean()) if distances is not None else float("nan"),
+            "p95_nearest_distance": float(np.quantile(distances, 0.95)) if distances is not None else float("nan"),
+            "max_nearest_distance": float(distances.max()) if distances is not None else float("nan"),
+            "fraction_within_radius": (
+                float((distances <= coverage_radius).mean()) if distances is not None else float("nan")
+            ),
+            "diced_fill": _blocked_diced_fill(samples, reference, half_width) if all_finite else float("nan"),
+        }
+
+    return {
+        "evaluation": {
+            "metric_version": 2,
+            "domain": "safely_excitable" if filter_testing_points else "full_box",
+            "points_per_dim": points_per_dim,
+            "coverage_radius": float(coverage_radius),
+            "bound_tolerance": float(bound_tolerance),
+            "safely_excitable_set_path": set_path,
+            "distance": "euclidean_normalized_coordinates",
+            "diced_fill_half_width": half_width,
+            "diced_fill_boundary": "strict_open_cells",
+        },
+        "validity": {
+            "all_finite": all_finite,
+            "n_transitions": int(len(actions)),
+            "n_finite_transitions": int(finite_transitions.sum()),
+            "first_nonfinite_transition": first_invalid(finite_transitions),
+        },
+        "observations": describe(observations, finite_observations),
+        "actions": describe(actions, finite_actions),
+        "constraints": {
+            "n_finite_observations": int(finite_observations.sum()),
+            "n_finite_state_action_pairs": int((finite_observations[:-1] & finite_actions).sum()),
+            "outside_safe_state_fraction_of_finite": not_safe_fraction(
+                observations, finite_observations, safe_state_set
+            ),
+            "outside_safely_excitable_fraction_of_finite": not_safe_fraction(
+                joint_samples, finite_observations[:-1] & finite_actions, safely_excitable_set
+            ),
+        },
+        "state_coverage": coverage(observations, state_grid, safe_state_set),
+        "state_action_coverage": coverage(joint_samples, joint_grid, safely_excitable_set),
+    }
 
 
 def update_excitation_df(
