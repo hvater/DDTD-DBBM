@@ -130,13 +130,18 @@ def save_excitation_result(path: Path, result: tuple):
     outputs remain available to the callback and are not serialized here.
     """
     observations, actions, model, estimator, losses, proposed_actions, _ = result
-    np.savez_compressed(
-        path / "trajectory.npz",
-        observations=np.asarray(observations),
-        actions=np.asarray(actions),
-        losses=np.asarray(losses),
-        proposed_actions=np.asarray(proposed_actions),
-    )
+
+    # update to adhere to legacy version where only prediction losses are returned
+    histories = losses if isinstance(losses, dict) else {"prediction_losses": losses}
+
+    trajectory = {
+        "observations": np.asarray(observations),
+        "actions": np.asarray(actions),
+        "losses": np.asarray(histories["prediction_losses"]),
+        "proposed_actions": np.asarray(proposed_actions),
+    }
+
+    np.savez_compressed(path / "trajectory.npz", **trajectory)
     eqx.tree_serialise_leaves(path / "model.eqx", model)
     eqx.tree_serialise_leaves(path / "estimator.eqx", estimator)
 
@@ -261,8 +266,16 @@ def load_excitation_result(path: Path):
 
     with np.load(path / "trajectory.npz", allow_pickle=False) as archive:
         trajectory = {
-            name: jnp.asarray(archive[name]) for name in ("observations", "actions", "losses", "proposed_actions")
+            name: jnp.asarray(archive[name])
+            for name in (
+                "observations",
+                "actions",
+                "losses",
+                "proposed_actions",
+            )
         }
+
+        trajectory["data_losses"] = jnp.asarray(archive["data_losses"]) if "data_losses" in archive else None
 
     # reconstruct objects
     loading_params = deepcopy(params["model_params"])
