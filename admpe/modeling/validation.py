@@ -17,7 +17,7 @@ def generate_one_step_validation_data(
     system_name,
     points_per_dim=10,
 ):
-    env, _, featurize, _, _ = setup_environment(system_name)
+    env, _, featurize, _, _ = setup_environment(system_name, model_type="neural_euler")
 
     # Match the deterministic environment used in model evaluation.
     env = eqx.tree_at(lambda e: e.process_noise_variance, env, 0.0)

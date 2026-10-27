@@ -238,7 +238,7 @@ def run_modeling_experiment(
                     train_data["actions"].shape,
                 )
 
-                _, _, featurize, _, model_class = setup_environment(system_name)
+                _, _, featurize, _, model_class = setup_environment(system_name, model_type)
                 params = setup_parameterization(
                     train_data,
                     model_type,

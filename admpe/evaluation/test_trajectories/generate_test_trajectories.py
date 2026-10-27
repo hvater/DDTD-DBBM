@@ -70,7 +70,7 @@ def setup_experiment(
     signal_overrides=None,
     ocp_overrides=None,
 ):
-    setup_env, _ = _SYSTEM_SETUP[system_name]
+    setup_env, _ = _SYSTEM_SETUP[system_name, "neural_euler"]
     env, penalty_function, featurize, env_params = setup_env()
 
     if noise_variance is not None:

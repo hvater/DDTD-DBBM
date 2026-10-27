@@ -15,6 +15,7 @@ from dmpe.utils.env_utils.cart_pole_utils import setup_env as setup_cart_pole
 from dmpe.utils.env_utils.fluid_tank_utils import setup_env as setup_fluid_tank
 from dmpe.utils.env_utils.pendulum_utils import setup_env as setup_pendulum
 
+from admpe.modeling.rnn import GRU, GRUPendulum, GRUCartpole
 from admpe.excitation.gp_excitation.gp_model import GPModel, update_gp_dataset
 from admpe.adaptive_densities import TargetDensity
 from admpe.vector_fields import DynamicsVectorField, CurvatureVectorField, LolaVectorField
@@ -35,9 +36,12 @@ SUPPORTED_OBJECTIVES = (
 SUPPORTED_MODELS = ("neural_euler", "perfect")
 
 _SYSTEM_SETUP = {
-    "fluid_tank": (setup_fluid_tank, NeuralEulerODE),
-    "pendulum": (setup_pendulum, NeuralEulerODEPendulum),
-    "cart_pole": (setup_cart_pole, NeuralEulerODECartpole),
+    ("fluid_tank", "neural_euler"): (setup_fluid_tank, NeuralEulerODE),
+    ("pendulum", "neural_euler"): (setup_pendulum, NeuralEulerODEPendulum),
+    ("cart_pole", "neural_euler"): (setup_cart_pole, NeuralEulerODECartpole),
+    ("fluid_tank", "gru"): (setup_fluid_tank, GRU),
+    ("pendulum", "gru"): (setup_pendulum, GRUPendulum),
+    ("cart_pole", "gru"): (setup_cart_pole, GRUCartpole),
 }
 
 
@@ -301,8 +305,8 @@ def setup_algorithm_parameterization(
     return params, proposed_actions, loader_key, expl_key, process_noise_key
 
 
-def setup_environment(system_name: str, noise_variance: float | None = None):
-    setup_env, model_class = _SYSTEM_SETUP[system_name]
+def setup_environment(system_name: str, model_type: str, noise_variance: float | None = None):
+    setup_env, model_class = _SYSTEM_SETUP[system_name, model_type]
     env, penalty_function, featurize, env_params = setup_env()
 
     # After constructing the environment:
@@ -326,7 +330,7 @@ def setup_model(system_name, model_type, model_params):
     if model_type == "perfect":
         return None
 
-    model_class = _SYSTEM_SETUP[system_name][-1]
+    model_class = _SYSTEM_SETUP[system_name, model_type][-1]
     return model_class(**model_params)
 
 
@@ -392,7 +396,9 @@ def setup_experiment(
     """
     validate_experiment(system_name, excitation_objective, model_type, n_time_steps)
 
-    env, penalty_function, featurize, env_params, model_class = setup_environment(system_name, noise_variance)
+    env, penalty_function, featurize, env_params, model_class = setup_environment(
+        system_name, model_type, noise_variance
+    )
 
     params, proposed_actions, loader_key, expl_key, process_noise_key = setup_algorithm_parameterization(
         seed,

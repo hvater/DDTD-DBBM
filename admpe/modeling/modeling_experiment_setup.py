@@ -9,7 +9,7 @@ from admpe.modeling.modeling_parameterization import fetch_parameterization
 
 
 # TODO: differentiate between different types, i.e., simulation or 1step prediction etc.
-SUPPORTED_MODELS = ["neural_euler", "gp_transition", "gp_sequence"]
+SUPPORTED_MODELS = ["neural_euler", "gru", "gp_transition", "gp_sequence"]
 
 
 def setup_parameterization(
@@ -39,7 +39,7 @@ def setup_parameterization(
 
 def setup_experiment(model_type, seed, params):
 
-    if model_type.startswith("neural_euler"):
+    if model_type.startswith("neural_euler") or model_type.startswith("gru"):
         model_key, loader_key = jax.random.split(jax.random.PRNGKey(seed))
         params["model_params"]["key"] = model_key
         model = params["model_class"](**params["model_params"])
