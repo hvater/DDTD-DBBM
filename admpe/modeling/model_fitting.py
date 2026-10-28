@@ -78,12 +78,7 @@ def fit(
             # replace best model if adequate
             if selection_metric is not None:
                 score = metrics[selection_metric]
-
-                if not math.isfinite(score):
-                    # TODO: dont really like this.... can we do something else here?
-                    raise FloatingPointError(f"Nonfinite validation loss at iteration {iteration}.")
-
-                if score < best_score:
+                if math.isfinite(score) and score < best_score:
                     best_model, best_score, best_iteration = model, score, iteration
 
     if selection_metric is None:
