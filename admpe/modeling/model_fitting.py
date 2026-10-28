@@ -39,7 +39,6 @@ def fit(
 
     best_model, best_score, best_iteration = model, math.inf, None
     history = []
-    average_losses = []
 
     for iteration in tqdm(range(n_iters + 1)):
 
@@ -53,12 +52,21 @@ def fit(
                 opt_state=opt_state,
                 loader_key=loader_key,
             )
-            average_losses.append(average_loss)
 
+        if iteration % validation_every != 0 and iteration != n_iters:
+            continue
+
+        # storing basic metrics
+        history_entry = {
+            "iteration": iteration,
+            "optimizer_steps": iteration * model_trainer.n_train_steps,
+            "training_loss": float(average_loss) if iteration > 0 else None,
+        }
+        history.append(history_entry)
+
+        # perform validation if validation data is available
         if validation_data is not None:
             # skip evaluation -> wait for next validation_every
-            if iteration % validation_every != 0 and iteration != n_iters:
-                continue
 
             # evaluate model performance
             metrics = {
@@ -70,13 +78,7 @@ def fit(
                     model_trainer.featurize,
                 ).items()
             }
-            history.append(
-                {
-                    "iteration": iteration,
-                    "optimizer_steps": iteration * model_trainer.n_train_steps,
-                    **metrics,
-                }
-            )
+            history_entry.update(metrics)
 
             # replace best model if adequate
             if selection_metric is not None:
@@ -84,6 +86,7 @@ def fit(
                 if math.isfinite(score) and score < best_score:
                     best_model, best_score, best_iteration = model, score, iteration
 
+    # if no selection metric is specified, the last model is returned after training conclusion
     if selection_metric is None:
         best_model = model
         best_score = None
@@ -94,5 +97,4 @@ def fit(
         "best_iteration": best_iteration,
         "best_validation_loss": best_score,
         "history": history,
-        "average_losses": average_losses,
     }

@@ -65,18 +65,45 @@ def get_validation_data(
     return validation_data
 
 
+def rollout_mse(model, validation_rollout_data, tau, featurize):
+    rollout_mse_values = {}
+
+    for signal_key, signal_validation_data in validation_rollout_data.items():
+
+        observations = jnp.asarray(signal_validation_data["observations"])
+        actions = jnp.asarray(signal_validation_data["actions"])
+
+        predictions = eqx.filter_vmap(model, in_axes=(0, 0, None))(
+            observations[:, 0, :],
+            actions,
+            tau,
+        )
+
+        squared_error = (featurize(observations)[:, 1:] - featurize(predictions)[:, 1:]) ** 2
+        rollout_mse_values[f"rollout_{signal_key}_mse"] = jnp.mean(squared_error)
+
+    return rollout_mse_values
+
+
 def one_step_mse(model, validation_data, tau, featurize):
     observations = validation_data["observations"]
     actions = validation_data["actions"]
     targets = validation_data["targets"]
-    pred = eqx.filter_vmap(model.step, in_axes=(0, 0, None))(observations, actions, tau)
 
-    error = eqx.filter_vmap(featurize)(pred) - targets
+    # add one dimension for the rollout model interface
+    action_sequences = actions[:, None, :]
+
+    pred = eqx.filter_vmap(model, in_axes=(0, 0, None))(observations, action_sequences, tau)
+
+    # the pred has two elements: the provided initial observation and the one predicted observation
+    assert pred.shape[1] == 2
+    next_observation = pred[:, 1, :]
+
+    error = eqx.filter_vmap(featurize)(next_observation) - targets
     return jnp.mean(error**2)
 
 
 def validate(model, validation_data, tau, featurize):
-    # TODO: add rollout scoring
 
     return {
         "one_step_mse": one_step_mse(
@@ -84,7 +111,13 @@ def validate(model, validation_data, tau, featurize):
             validation_data["one_step"],
             tau,
             featurize,
-        )
+        ),
+        **rollout_mse(
+            model,
+            validation_data["rollout"],
+            tau,
+            featurize,
+        ),
     }
 
 
@@ -105,5 +138,7 @@ def visualize_validation_scores(
 
     axs.set_ylabel(selection_metric)
     axs.set_xlabel("optimizer steps")
+
+    fig.suptitle(selection_metric)
 
     return fig, axs
