@@ -6,6 +6,7 @@ import pandas as pd
 import equinox as eqx
 import jax.numpy as jnp
 
+from admpe.data_management import load_validation_sequences
 from admpe.excitation.excitation_experiment_setup import setup_environment
 from admpe.evaluation.modeling_evaluation import (
     generate_default_prediction_validation_points,
@@ -41,16 +42,17 @@ def generate_one_step_validation_data(
 
 
 def load_rollout_validation_data(
-    path,
+    system_name,
 ):
-    log.warning("No rollout validation data available")
-    return None
+    validation_data = load_validation_sequences(system_name)
+    if not validation_data:
+        log.warning("No rollout validation data available")
+    return validation_data
 
 
 def get_validation_data(
     system_name,
     one_step_points_per_dim: int = 10,
-    rollout_paths: pathlib.Path | None = None,
 ):
 
     validation_data = {}
@@ -58,7 +60,7 @@ def get_validation_data(
         system_name=system_name,
         points_per_dim=one_step_points_per_dim,
     )
-    validation_data["rollout"] = load_rollout_validation_data(rollout_paths)
+    validation_data["rollout"] = load_rollout_validation_data(system_name)
 
     return validation_data
 

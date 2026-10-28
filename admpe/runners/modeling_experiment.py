@@ -172,7 +172,7 @@ def run_modeling_experiment(
     continue_on_error: bool = False,
     perform_validation: bool = False,
     validation_every: int = 50,
-    selection_metric: str = "one_step_mse",
+    selection_metric: str | None = None,
     *,
     model_trainer_overrides=None,
     model_overrides=None,

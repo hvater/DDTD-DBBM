@@ -18,7 +18,7 @@ def fit(
     *,
     validation_data=None,
     validation_every=50,
-    selection_metric="one_step_mse",
+    selection_metric=None,
 ):
 
     if model_type.startswith("gp_"):
@@ -27,6 +27,9 @@ def fit(
     if validation_data is not None:
         if validation_every < 1:
             raise ValueError("validation_every must be positive.")
+
+    if selection_metric is not None and validation_data is None:
+        raise ValueError("Model selection requires validation data.")
 
     observations = train_data["observations"]
     actions = train_data["actions"]
@@ -54,7 +57,7 @@ def fit(
             if iteration % validation_every != 0 and iteration != n_iters:
                 continue
 
-            # evaluate model performance, replace best model if adequate
+            # evaluate model performance
             metrics = {
                 name: float(value)
                 for name, value in validate(
@@ -64,12 +67,6 @@ def fit(
                     model_trainer.featurize,
                 ).items()
             }
-            score = metrics[selection_metric]
-
-            if not math.isfinite(score):
-                # TODO: dont really like this.... can we do something else here?
-                raise FloatingPointError(f"Nonfinite validation loss at iteration {iteration}.")
-
             history.append(
                 {
                     "iteration": iteration,
@@ -77,10 +74,22 @@ def fit(
                     **metrics,
                 }
             )
-            if score < best_score:
-                best_model, best_score, best_iteration = model, score, iteration
-        else:
-            best_model, best_score, best_iteration, selection_metric, history = model, None, None, None, None
+
+            # replace best model if adequate
+            if selection_metric is not None:
+                score = metrics[selection_metric]
+
+                if not math.isfinite(score):
+                    # TODO: dont really like this.... can we do something else here?
+                    raise FloatingPointError(f"Nonfinite validation loss at iteration {iteration}.")
+
+                if score < best_score:
+                    best_model, best_score, best_iteration = model, score, iteration
+
+    if selection_metric is None:
+        best_model = model
+        best_score = None
+        best_iteration = None
 
     return best_model, {
         "selection_metric": selection_metric,
