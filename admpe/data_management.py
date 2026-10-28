@@ -6,6 +6,7 @@ import dataclasses
 import json
 from pathlib import Path
 from copy import deepcopy
+from enum import Enum
 
 import numpy as np
 import pandas as pd
@@ -52,6 +53,12 @@ VALIDATION_TRAJECTORIES_ROOT.mkdir(parents=True, exist_ok=True)
 
 SAFELY_EXCITABLE_SETS_ROOT = Path(__file__).resolve().parent.parent / "data" / "safely_excitable_sets"
 SAFELY_EXCITABLE_SETS_ROOT.mkdir(parents=True, exist_ok=True)
+
+
+class Systems(Enum):
+    FLUID_TANK = 1
+    PENDULUM = 2
+    CART_POLE = 3
 
 
 def _json_value(value):
@@ -423,19 +430,29 @@ def provide_modeling_results_overview(results: dict):
     return provide_results_overview(results, MODELING_OVERVIEW_FIELDS)
 
 
+def load_validation_sequences(
+    system_name: str,
+    root: str | Path = VALIDATION_TRAJECTORIES_ROOT / "safely_excitable_trajectories",
+):
+    log.info("Searching for validation sequences at:" + str(root))
+    paths = [file.parent for file in sorted(Path(root).rglob("experiment.json"))]
+    return load_sequences(system_name=system_name, paths=paths, discovering=True)
+
+
 def load_testing_sequences(
     system_name: str,
-    paths: list[Path] | None = None,
-    *,
     root: str | Path = TESTING_TRAJECTORIES_ROOT / "safely_excitable_trajectories",
 ):
-    # paths are not specified, look for results below root
-    discover = paths is None
-    log.info("No path is specified for loading testing sequences, searching at:" + str(root))
+    log.info("Searching for testing sequences at:" + str(root))
+    paths = [file.parent for file in sorted(Path(root).rglob("experiment.json"))]
+    return load_sequences(system_name=system_name, paths=paths, discovering=True)
 
-    if discover:
-        paths = [file.parent for file in sorted(Path(root).rglob("experiment.json"))]
 
+def load_sequences(
+    system_name: str,
+    paths: list[Path] | None = None,
+    discovering: bool = False,
+):
     grouped = {}
     seen = set()
 
@@ -446,7 +463,8 @@ def load_testing_sequences(
 
         # check that the system_name is fitting and the experiment is completed
         if metadata.get("system_name") != system_name or metadata.get("status") != "completed":
-            if discover:
+            if discovering:
+                # in discovering mode, just skip unfinished experiments
                 continue
             raise ValueError(f"Not a completed {system_name!r} testing run: {folder}")
 
