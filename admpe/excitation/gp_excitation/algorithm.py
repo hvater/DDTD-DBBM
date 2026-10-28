@@ -61,7 +61,7 @@ def excite_and_fit_with_gp(
 
         if model_trainer is not None:
             if k > model_trainer.start_learning:
-                model, opt_state_model, loader_key = model_trainer.fit(
+                model, opt_state_model, average_loss, loader_key = model_trainer.fit(
                     model=model,
                     k=jnp.array([k]),
                     observations=observations,
