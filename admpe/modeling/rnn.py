@@ -10,50 +10,57 @@ class GRU(eqx.Module):
 
     hidden_size: int = eqx.field(static=True)
     cell: eqx.Module
-    obs_dim: int
+    linear: eqx.Module
+    output_dim: int
+    input_dim: int
 
     def __init__(self, obs_dim: int, action_dim: int, hidden_size: int, *, key):
 
-        if hidden_size < obs_dim:
-            raise ValueError("'hidden_size' must be greater than 'obs_dim'")
-
         self.hidden_size = hidden_size
-        self.cell = eqx.nn.GRUCell(action_dim, hidden_size, key=key)
-        self.obs_dim = obs_dim
+        self.output_dim = obs_dim
+        self.input_dim = obs_dim + action_dim
 
-    def step(self, action, carry):
-        return self.cell(action, carry)
+        cell_key, linear_key = jax.random.split(key)
+        self.cell = eqx.nn.GRUCell(self.input_dim, self.hidden_size, key=cell_key)
+        self.linear = eqx.nn.Linear(self.hidden_size, self.output_dim, use_bias=True, key=linear_key)
+
+    def step(self, obs, action, hidden):
+        next_hidden = self.cell(jnp.hstack([obs, action]), hidden)
+        next_obs = obs + self.linear(next_hidden)
+        return next_obs, next_hidden
 
     def __call__(self, init_obs: jax.Array, actions: jax.Array, tau: float) -> jax.Array:
 
-        hidden = jnp.hstack([init_obs, jnp.zeros(self.hidden_size - self.obs_dim)])
+        hidden = jnp.zeros(self.hidden_size)
+        carry = (init_obs, hidden)
 
         def f(carry, action):
-            rnn_out = self.step(action, carry)
-            pred_observation = rnn_out[: self.obs_dim]
-            return rnn_out, pred_observation
+            obs, hidden = carry
+            next_obs, next_hidden = self.step(obs, action, hidden)
+            return (next_obs, next_hidden), next_obs
 
-        _, pred_observations = jax.lax.scan(f, hidden, actions)
+        _, pred_observations = jax.lax.scan(f, carry, actions)
         return jnp.concatenate([init_obs[None], pred_observations], axis=0)
+
+
+def wrap_angle(obs, indices):
+    indices = jnp.asarray(indices, dtype=jnp.int32)
+    angles = obs[..., indices]
+    wrapped = (angles + 1) % 2 - 1
+    return obs.at[..., indices].set(wrapped)
 
 
 class GRUPendulum(GRU):
 
-    def step(self, action, carry):
-        rnn_out = super().step(action, carry)
-
-        next_obs = rnn_out[: self.obs_dim]
-        wrapped_obs = jnp.stack([(((next_obs[..., 0] + 1) % 2) - 1), next_obs[..., 1]], axis=-1)
-        return jnp.hstack([wrapped_obs, rnn_out[self.obs_dim :]])
+    def step(self, obs, action, hidden):
+        next_obs, next_hidden = super().step(obs, action, hidden)
+        wrapped_obs = wrap_angle(next_obs, 0)
+        return wrapped_obs, next_hidden
 
 
 class GRUCartpole(GRU):
 
-    def step(self, action, carry):
-        rnn_out = super().step(action, carry)
-
-        next_obs = rnn_out[: self.obs_dim]
-        wrapped_obs = jnp.stack(
-            [next_obs[..., 0], next_obs[..., 1], (((next_obs[..., 2] + 1) % 2) - 1), next_obs[..., 3]], axis=-1
-        )
-        return jnp.hstack([wrapped_obs, rnn_out[self.obs_dim :]])
+    def step(self, obs, action, hidden):
+        next_obs, next_hidden = super().step(obs, action, hidden)
+        wrapped_obs = wrap_angle(next_obs, 2)
+        return wrapped_obs, next_hidden

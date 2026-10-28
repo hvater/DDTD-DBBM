@@ -94,7 +94,10 @@ class EnvWrapper(ModelWrapper):
 
 
 def get_wrapped_model_and_env(modeling_result):
-    env, _, featurize, _, _ = setup_environment(modeling_result["metadata"]["system_name"])
+    env, _, featurize, _, _ = setup_environment(
+        modeling_result["metadata"]["system_name"],
+        model_type=modeling_result["metadata"]["model_type"],
+    )
     env = eqx.tree_at(lambda s: s.process_noise_variance, env, 0.0)  # force env to be deterministic
 
     # wrap model and env:
