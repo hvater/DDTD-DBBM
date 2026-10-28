@@ -330,8 +330,14 @@ def setup_model(system_name, model_type, model_params):
     if model_type == "perfect":
         return None
 
-    model_class = _SYSTEM_SETUP[system_name, model_type][-1]
-    return model_class(**model_params)
+    setup_env, model_class = _SYSTEM_SETUP[system_name, model_type]
+    params = dict(model_params)
+
+    if issubclass(model_class, GRU):
+        _, _, featurize, _ = setup_env()
+        params["featurize"] = featurize
+
+    return model_class(**params)
 
 
 def setup_estimator(excitation_objective, params, trajectory=None):

@@ -70,6 +70,7 @@ def fetch_parameterization(
             obs_dim={"fluid_tank": 1, "pendulum": 2, "cart_pole": 4}[system_name],
             action_dim=1,
             hidden_size=12,
+            featurize=featurize,
             key=None,
         )
         model_trainer_params = dict(

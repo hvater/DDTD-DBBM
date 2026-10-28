@@ -13,19 +13,23 @@ class GRU(eqx.Module):
     linear: eqx.Module
     output_dim: int
     input_dim: int
+    featurize: Callable
 
-    def __init__(self, obs_dim: int, action_dim: int, hidden_size: int, *, key):
+    def __init__(self, obs_dim: int, action_dim: int, hidden_size: int, featurize: Callable, *, key):
 
         self.hidden_size = hidden_size
         self.output_dim = obs_dim
-        self.input_dim = obs_dim + action_dim
+
+        self.featurize = featurize
+        feat_obs_dim = self.featurize(jnp.zeros(obs_dim)).shape[-1]
+        self.input_dim = feat_obs_dim + action_dim
 
         cell_key, linear_key = jax.random.split(key)
         self.cell = eqx.nn.GRUCell(self.input_dim, self.hidden_size, key=cell_key)
         self.linear = eqx.nn.Linear(self.hidden_size, self.output_dim, use_bias=True, key=linear_key)
 
     def step(self, obs, action, hidden):
-        next_hidden = self.cell(jnp.hstack([obs, action]), hidden)
+        next_hidden = self.cell(jnp.hstack([self.featurize(obs), action]), hidden)
         next_obs = obs + self.linear(next_hidden)
         return next_obs, next_hidden
 
