@@ -17,6 +17,17 @@ def parse_neural_euler_variant(model_type: str) -> tuple[str, int]:
     return size, horizon
 
 
+def get_base_model_type(model_type: str) -> str:
+    if model_type == "neural_euler":
+        return model_type
+
+    if model_type.startswith("neural_euler_"):
+        parse_neural_euler_variant(model_type)  # validate size and horizon
+        return "neural_euler"
+
+    return model_type
+
+
 def fetch_parameterization(
     system_name,
     model_type,
@@ -51,6 +62,7 @@ def fetch_parameterization(
             action_dim=1,
             width_size=width_size,
             depth=depth,
+            featurize=featurize,
             key=None,
         )
         model_trainer_params = dict(

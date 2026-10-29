@@ -3,7 +3,7 @@ import abc
 import jax
 import equinox as eqx
 
-from dmpe.models.models import NeuralEulerODE
+from admpe.modeling.neural_euler import NeuralEulerODE
 from dmpe.models.model_utils import simulate_ahead_with_env
 import exciting_environments as excenvs
 

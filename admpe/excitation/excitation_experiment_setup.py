@@ -8,13 +8,15 @@ import equinox as eqx
 
 import exciting_environments as excenvs
 
-from dmpe.models.models import NeuralEulerODE, NeuralEulerODECartpole, NeuralEulerODEPendulum
+
 from dmpe.utils.density_estimation import build_grid, DensityEstimate, get_uniform_target_distribution
 from dmpe.utils.signals import aprbs
 from dmpe.utils.env_utils.cart_pole_utils import setup_env as setup_cart_pole
 from dmpe.utils.env_utils.fluid_tank_utils import setup_env as setup_fluid_tank
 from dmpe.utils.env_utils.pendulum_utils import setup_env as setup_pendulum
 
+from admpe.modeling.modeling_parameterization import get_base_model_type
+from admpe.modeling.neural_euler import NeuralEulerODE, NeuralEulerODECartpole, NeuralEulerODEPendulum
 from admpe.modeling.rnn import GRU, GRUPendulum, GRUCartpole
 from admpe.excitation.gp_excitation.gp_model import GPModel, update_gp_dataset
 from admpe.adaptive_densities import TargetDensity
@@ -306,7 +308,7 @@ def setup_algorithm_parameterization(
 
 
 def setup_environment(system_name: str, model_type: str, noise_variance: float | None = None):
-    setup_env, model_class = _SYSTEM_SETUP[system_name, model_type]
+    setup_env, model_class = _SYSTEM_SETUP[system_name, get_base_model_type(model_type)]
     env, penalty_function, featurize, env_params = setup_env()
 
     # After constructing the environment:
@@ -330,12 +332,20 @@ def setup_model(system_name, model_type, model_params):
     if model_type == "perfect":
         return None
 
-    setup_env, model_class = _SYSTEM_SETUP[system_name, model_type]
+    setup_env, model_class = _SYSTEM_SETUP[system_name, get_base_model_type(model_type)]
     params = dict(model_params)
 
     if issubclass(model_class, GRU):
         _, _, featurize, _ = setup_env()
         params["featurize"] = featurize
+    elif issubclass(model_class, NeuralEulerODE):
+        # if there is no featurize model parameter, the model has been created in the old framework
+        # featurize = None reproduces the old behavior
+        if params.get("featurize") is None:
+            params["featurize"] = None
+        else:
+            _, _, featurize, _ = setup_env()
+            params["featurize"] = featurize
 
     return model_class(**params)
 

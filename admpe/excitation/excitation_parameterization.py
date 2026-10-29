@@ -40,6 +40,7 @@ def fetch_parameterization(system_name, model_type, excitation_objective):
             obs_dim=env.physical_state_dim,
             action_dim=env.action_dim,
             width_size=128,
+            featurize=featurize,
             depth=3,
             key=None,
         )
@@ -75,6 +76,7 @@ def fetch_parameterization(system_name, model_type, excitation_objective):
             obs_dim=env.physical_state_dim,
             action_dim=env.action_dim,
             width_size=128,
+            featurize=featurize,
             depth=3,
             key=None,
         )
@@ -110,6 +112,7 @@ def fetch_parameterization(system_name, model_type, excitation_objective):
             obs_dim=env.physical_state_dim,
             action_dim=env.action_dim,
             width_size=128,
+            featurize=featurize,
             depth=3,
             key=None,
         )
