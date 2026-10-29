@@ -24,6 +24,9 @@ from admpe.evaluation.modeling_metrics import (
 )
 from admpe.evaluation.model_wrapping import EnvWrapper, ModelWrapper, get_wrapped_model_and_env
 from admpe.sets import SafelyExcitableSet
+from admpe.excitation.excitation_experiment_setup import setup_environment
+from admpe.modeling.baselines import PersistenceModel
+from admpe.evaluation.model_wrapping import NodeModelWrapper
 
 
 def load_corresponding_excitation_result(modeling_result):
@@ -286,4 +289,28 @@ def update_modeling_df(
     return pd.concat(
         [df, new_df_entries],
         ignore_index=True,
+    )
+
+
+def evaluate_persistence_prediction(
+    system_name,
+    *,
+    filter_testing_points=False,
+    validation_points=None,
+):
+    env, _, featurize, _, _ = setup_environment(system_name, model_type="neural_euler")
+    env = eqx.tree_at(lambda e: e.process_noise_variance, env, 0.0)
+
+    wrapped_env = EnvWrapper(env, featurize)
+    wrapped_model = NodeModelWrapper(PersistenceModel(), featurize)
+
+    safely_excitable_set = SafelyExcitableSet.from_system_name(system_name)[0] if filter_testing_points else None
+
+    return to_python(
+        evaluate_model_prediction(
+            wrapped_model,
+            wrapped_env,
+            validation_points=validation_points,
+            safely_excitable_set=safely_excitable_set,
+        )
     )
