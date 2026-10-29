@@ -71,7 +71,7 @@ def model_prediction(
     observations = validation_points[:, : wrapped_env.model.obs_dim]
     actions = validation_points[:, wrapped_env.model.obs_dim :]
 
-    pred = eqx.filter_vmap(wrapped_model.step, in_axes=(0, 0, None))(observations, actions, 1.0)
+    pred = eqx.filter_vmap(wrapped_model.rollout, in_axes=(0, 0, None))(observations, actions[:, None, :], 1.0)[:, 1, :]
     pred_gt = eqx.filter_vmap(wrapped_env.step, in_axes=(0, 0, None))(observations, actions, wrapped_env.model.tau)
 
     return pred, pred_gt
