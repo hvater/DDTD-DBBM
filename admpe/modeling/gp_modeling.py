@@ -1,5 +1,7 @@
 from typing import Callable
 
+import tqdm
+
 import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
@@ -80,6 +82,9 @@ class GPTransitionModel(eqx.Module):
         self.alpha = jnp.zeros_like(self.train_y)
 
     def step(self, obs, action, tau):
+        obs = jnp.asarray(obs, dtype=self.alpha.dtype)
+        action = jnp.asarray(action, dtype=self.train_x.dtype)
+
         query = jnp.concatenate([self.featurize(obs), action])[None, :]
         delta = jnp.stack(
             [
@@ -97,7 +102,14 @@ class GPTransitionModel(eqx.Module):
         return next_obs
 
     def __call__(self, init_obs, actions, tau):
-        raise NotImplementedError()
+        init_obs = jnp.asarray(init_obs, dtype=self.alpha.dtype)
+
+        def body(obs, action):
+            next_obs = self.step(obs, action, tau)
+            return next_obs, next_obs
+
+        _, predictions = jax.lax.scan(body, init_obs, actions)
+        return jnp.concatenate([init_obs[None, :], predictions], axis=0)
 
 
 def fit_gp_transitions(
@@ -131,7 +143,7 @@ def fit_gp_transitions(
 
     posteriors, alphas, histories = [], [], []
 
-    for index, posterior in enumerate(model.posteriors):
+    for index, posterior in tqdm.tqdm(enumerate(model.posteriors)):
         dataset = gpx.Dataset(
             X=inputs,
             y=targets[:, index : index + 1],
