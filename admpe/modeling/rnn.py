@@ -35,7 +35,10 @@ class GRU(eqx.Module):
 
     def __call__(self, init_obs: jax.Array, actions: jax.Array, tau: float) -> jax.Array:
 
-        hidden = jnp.zeros(self.hidden_size)
+        dtype = self.linear.weight.dtype
+        init_obs = jnp.asarray(init_obs, dtype=dtype)
+        actions = jnp.asarray(actions, dtype=dtype)
+        hidden = jnp.zeros(self.hidden_size, dtype=dtype)
         carry = (init_obs, hidden)
 
         def f(carry, action):
