@@ -8,11 +8,11 @@ from dmpe.models.model_training import ModelTrainer
 from admpe.modeling.validation import validate
 
 
-def fit(
+def fit_gp(
     train_data,
     model_type,
     model,
-    model_trainer: ModelTrainer,
+    model_trainer: ModelTrainer | None,
     opt_state,
     loader_key,
     params,
@@ -21,10 +21,22 @@ def fit(
     validation_every=50,
     selection_metric=None,
 ):
+    raise NotImplementedError()
 
-    if model_type.startswith("gp_"):
-        raise NotImplementedError()
 
+def fit_nn(
+    train_data,
+    model_type,
+    model,
+    model_trainer: ModelTrainer | None,
+    opt_state,
+    loader_key,
+    params,
+    *,
+    validation_data=None,
+    validation_every=50,
+    selection_metric=None,
+):
     if validation_data is not None:
         if validation_every < 1:
             raise ValueError("validation_every must be positive.")
@@ -98,3 +110,45 @@ def fit(
         "best_validation_loss": best_score,
         "history": history,
     }
+
+
+def fit(
+    train_data,
+    model_type,
+    model,
+    model_trainer: ModelTrainer | None,
+    opt_state,
+    loader_key,
+    params,
+    *,
+    validation_data=None,
+    validation_every=50,
+    selection_metric=None,
+):
+
+    if model_type.startswith("gp_"):
+        return fit_gp(
+            train_data,
+            model_type,
+            model,
+            model_trainer,
+            opt_state,
+            loader_key,
+            params,
+            validation_data=validation_data,
+            validation_every=validation_every,
+            selection_metric=selection_metric,
+        )
+    else:
+        return fit_nn(
+            train_data,
+            model_type,
+            model,
+            model_trainer,
+            opt_state,
+            loader_key,
+            params,
+            validation_data=validation_data,
+            validation_every=validation_every,
+            selection_metric=selection_metric,
+        )

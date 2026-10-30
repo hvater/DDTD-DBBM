@@ -46,5 +46,7 @@ def setup_experiment(model_type, seed, params):
         model_trainer = ModelTrainer(**params["model_trainer_params"])
         opt_state = model_trainer.model_optimizer.init(eqx.filter(model, eqx.is_inexact_array))
         return model, model_trainer, opt_state, loader_key, params
+    elif model_type.startswith("gp_"):
+        raise NotImplementedError()
     else:
         raise NotImplementedError()
