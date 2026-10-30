@@ -7,7 +7,6 @@ from dmpe.models.model_training import ModelTrainer
 from admpe.excitation.excitation_experiment_setup import SUPPORTED_SYSTEMS, apply_overrides
 from admpe.modeling.modeling_parameterization import fetch_parameterization
 
-
 # TODO: differentiate between different types, i.e., simulation or 1step prediction etc.
 SUPPORTED_MODELS = ["neural_euler", "gru", "gp_transition", "gp_sequence"]
 
@@ -24,16 +23,29 @@ def setup_parameterization(
     model_trainer_params = apply_overrides(model_trainer_params, model_trainer_overrides)
     model_params = apply_overrides(model_params, model_overrides)
 
-    n_iters = model_trainer_params["n_iters"]
-    del model_trainer_params["n_iters"]
+    if model_type == "gp_transition":
+        n_available = train_data["actions"].shape[0]
+        max_points = model_trainer_params["max_train_points"]
 
-    # TODO: Is more parameterization required?
-    params = dict(
-        model_trainer_params=model_trainer_params,
-        model_params=model_params,
-        model_class=model_class,
-        n_iters=n_iters,
-    )
+        if n_available < 1 or max_points < 1:
+            raise ValueError("Need training transitions and a positive max_train_points.")
+
+        model_params["n_train_points"] = min(n_available, max_points)
+        params = dict(
+            model_params=model_params,
+            model_trainer_params=model_trainer_params,
+            model_class=model_class,
+        )
+    else:
+        n_iters = model_trainer_params["n_iters"]
+        del model_trainer_params["n_iters"]
+
+        params = dict(
+            model_trainer_params=model_trainer_params,
+            model_params=model_params,
+            model_class=model_class,
+            n_iters=n_iters,
+        )
     return params
 
 
@@ -46,7 +58,8 @@ def setup_experiment(model_type, seed, params):
         model_trainer = ModelTrainer(**params["model_trainer_params"])
         opt_state = model_trainer.model_optimizer.init(eqx.filter(model, eqx.is_inexact_array))
         return model, model_trainer, opt_state, loader_key, params
-    elif model_type.startswith("gp_"):
-        raise NotImplementedError()
+    elif model_type == "gp_transition":
+        model = params["model_class"](**params["model_params"])
+        return model, None, None, None, params
     else:
         raise NotImplementedError()

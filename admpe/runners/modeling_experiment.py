@@ -192,6 +192,14 @@ def run_modeling_experiment(
     if len(set(seeds_to_run)) != len(seeds_to_run):
         raise ValueError("seeds must be unique within an experiment.")
 
+    if model_type == "gp_transition":
+        log.warning(
+            "GP transition training is deterministic for fixed data and parameters. "
+            "The modeling seed is used only as an experiment identifier."
+        )
+        if len(seeds_to_run) > 1:
+            raise ValueError("gp_transition accepts only one modeling seed because training is deterministic.")
+
     jax.config.update("jax_enable_x64", use_f64)
     devices = jax.devices("cpu" if gpu_id == -1 else "gpu")
     index = 0 if gpu_id == -1 else gpu_id

@@ -2,16 +2,18 @@ import math
 
 from tqdm import tqdm
 
+import jax
 import jax.numpy as jnp
 
 from dmpe.models.model_training import ModelTrainer
 from admpe.modeling.validation import validate
+from admpe.modeling.gp_modeling import fit_gp_transitions, GPTransitionModel
 
 
 def fit_gp(
     train_data,
     model_type,
-    model,
+    model: GPTransitionModel,
     model_trainer: ModelTrainer | None,
     opt_state,
     loader_key,
@@ -21,7 +23,60 @@ def fit_gp(
     validation_every=50,
     selection_metric=None,
 ):
-    raise NotImplementedError()
+    if model_type != "gp_transition":
+        raise NotImplementedError(model_type)
+    if selection_metric is not None:
+        raise ValueError("GP checkpoint selection is not implemented.")
+
+    observations = train_data["observations"]
+    actions = train_data["actions"]
+
+    # Select model.N transitions evenly across the complete trajectory.
+    # When model.N equals the transition count, every transition is selected.
+    indices = jnp.linspace(
+        0,
+        actions.shape[0] - 1,
+        num=model.N,
+        dtype=jnp.int32,
+    )
+
+    model, histories = fit_gp_transitions(
+        model,
+        observations,
+        actions,
+        indices=indices,
+        max_iters=params["model_trainer_params"]["max_iters"],
+    )
+
+    entry = {
+        "iteration": 1,
+        "optimizer_steps": sum(len(h) - 1 for h in histories),
+        "training_loss": sum(float(h[-1]) for h in histories),
+    }
+
+    if validation_data is not None:
+        entry.update(
+            {
+                name: float(value)
+                for name, value in validate(
+                    model,
+                    validation_data,
+                    tau=1.0,
+                    featurize=model.featurize,
+                ).items()
+            }
+        )
+
+    return model, {
+        "selection_metric": None,
+        "best_iteration": None,
+        "best_validation_loss": None,
+        "history": [entry],
+        "training_loss_type": "summed_negative_log_marginal_likelihood",
+        "gp_optimizer_histories": [h.tolist() for h in histories],
+        "training_indices": indices.tolist(),
+        "validation_schedule": "final_only",
+    }
 
 
 def fit_nn(

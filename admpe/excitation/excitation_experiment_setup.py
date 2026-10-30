@@ -18,6 +18,8 @@ from dmpe.utils.env_utils.pendulum_utils import setup_env as setup_pendulum
 from admpe.modeling.modeling_parameterization import get_base_model_type
 from admpe.modeling.neural_euler import NeuralEulerODE, NeuralEulerODECartpole, NeuralEulerODEPendulum
 from admpe.modeling.rnn import GRU, GRUPendulum, GRUCartpole
+from admpe.modeling.gp_modeling import GPTransitionModel
+
 from admpe.excitation.gp_excitation.gp_model import GPModel, update_gp_dataset
 from admpe.adaptive_densities import TargetDensity
 from admpe.vector_fields import DynamicsVectorField, CurvatureVectorField, LolaVectorField
@@ -44,6 +46,9 @@ _SYSTEM_SETUP = {
     ("fluid_tank", "gru"): (setup_fluid_tank, GRU),
     ("pendulum", "gru"): (setup_pendulum, GRUPendulum),
     ("cart_pole", "gru"): (setup_cart_pole, GRUCartpole),
+    ("fluid_tank", "gp_transition"): (setup_fluid_tank, GPTransitionModel),
+    ("pendulum", "gp_transition"): (setup_pendulum, GPTransitionModel),
+    ("cart_pole", "gp_transition"): (setup_cart_pole, GPTransitionModel),
 }
 
 
@@ -335,7 +340,7 @@ def setup_model(system_name, model_type, model_params):
     setup_env, model_class = _SYSTEM_SETUP[system_name, get_base_model_type(model_type)]
     params = dict(model_params)
 
-    if issubclass(model_class, GRU):
+    if issubclass(model_class, (GRU, GPTransitionModel)):
         _, _, featurize, _ = setup_env()
         params["featurize"] = featurize
     elif issubclass(model_class, NeuralEulerODE):

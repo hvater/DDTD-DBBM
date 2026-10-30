@@ -97,19 +97,28 @@ def fetch_parameterization(
         )
         model_class = proposed_model_class
 
-    elif model_type.startswith("gp_"):
+    elif model_type == "gp_transition":
         model_params = dict(
+            obs_dim={"fluid_tank": 1, "pendulum": 2, "cart_pole": 4}[system_name],
+            action_dim=1,
+            featurize=featurize,
+            angle_indices={
+                "fluid_tank": (),
+                "pendulum": (0,),
+                "cart_pole": (2,),
+            }[system_name],
             lengthscale=0.5,
             variance=1.0,
-            obs_stddev=0.1,
+            obs_stddev=0.0,
+            key=None,
         )
         model_trainer_params = dict(
             max_iters=100,
-            max_train_points=500,
+            max_train_points=15000,
         )
-        if model_type == "gp_transition":
-            model_class = GPTransitionModel
-        elif model_type == "gp_sequence":
-            model_class = GPSequenceModel
+        model_class = GPTransitionModel
+
+    elif model_type == "gp_sequence":
+        raise NotImplementedError("GPSequenceModel is not implemented.")
 
     return model_params, model_trainer_params, model_class
