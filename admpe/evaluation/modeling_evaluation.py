@@ -29,14 +29,16 @@ from admpe.modeling.baselines import PersistenceModel
 from admpe.evaluation.model_wrapping import NodeModelWrapper
 
 
-def load_corresponding_excitation_result(modeling_result):
+def load_corresponding_excitation_result(modeling_result, *, dtype=None):
     """TODO: Move to a modeling result dataclass? Also visualizations could go in there"""
 
     try:
-        excitation_result = load_excitation_result(pathlib.Path(modeling_result["metadata"]["dataset_path"]))
+        excitation_result = load_excitation_result(
+            pathlib.Path(modeling_result["metadata"]["dataset_path"]), dtype=dtype
+        )
     except FileNotFoundError:
         path = pathlib.Path(modeling_result["metadata"]["dataset_path"].removeprefix("PosixPath('").removesuffix("')"))
-        excitation_result = load_excitation_result(pathlib.Path(path))
+        excitation_result = load_excitation_result(pathlib.Path(path), dtype=dtype)
 
     return excitation_result
 
@@ -182,6 +184,8 @@ def update_modeling_df(
     df: pd.DataFrame,
     result_paths: list[pathlib.Path],
     filter_testing_points: bool = False,
+    *,
+    dtype=None,
 ):
     """Append new modeling experiments and fill in their excitation objectives.
 
@@ -248,7 +252,7 @@ def update_modeling_df(
         if metadata.get("status") != "completed":
             raise ValueError(f"Experiment is not completed: {result_path}")
 
-        result = load_modeling_result(result_path)
+        result = load_modeling_result(result_path, dtype=dtype)
 
         wrapped_model, wrapped_env = get_wrapped_model_and_env(result)
         metrics_jax = evaluate_model(

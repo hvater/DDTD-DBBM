@@ -25,6 +25,8 @@ def load_corresponding_modeling_results(
     exp_name: str | None = None,
     enforce_identical_exp_name: bool = True,
     status: str | list[str] | None = "completed",
+    *,
+    dtype=None,
 ) -> list[dict]:
     excitation_metadata = excitation_result["metadata"]
     excitation_id = excitation_metadata["exp_id"]
@@ -50,12 +52,12 @@ def load_corresponding_modeling_results(
 
         dataset_path = str(dataset_path).removeprefix("PosixPath('").removesuffix("')")
         if pathlib.Path(dataset_path).name == excitation_id:
-            results.append(load_modeling_result(result_path["path"]))
+            results.append(load_modeling_result(result_path["path"], dtype=dtype))
 
     return results
 
 
-def load_excitation_comparison(excitation_results_overview, *, objectives, seed):
+def load_excitation_comparison(excitation_results_overview, *, objectives, seed, dtype=None):
     """Load exactly one run per objective for the selected excitation seed."""
     selected_paths = {}
 
@@ -72,7 +74,7 @@ def load_excitation_comparison(excitation_results_overview, *, objectives, seed)
 
         selected_paths[objective] = matches.iloc[0]["path"]
 
-    return {objective: load_excitation_result(path) for objective, path in selected_paths.items()}
+    return {objective: load_excitation_result(path, dtype=dtype) for objective, path in selected_paths.items()}
 
 
 def evaluate_finite_data(observations, actions):
@@ -253,6 +255,8 @@ def evaluate_excitation_result(
 def update_excitation_df(
     df: pd.DataFrame,
     result_paths: list[pathlib.Path],
+    *,
+    dtype=None,
 ):
     """Append new excitation experiments and their metric values.
 
@@ -290,7 +294,7 @@ def update_excitation_df(
         if metadata.get("status") != "completed":
             raise ValueError(f"Experiment is not completed: {result_path}")
 
-        result = load_excitation_result(result_path)
+        result = load_excitation_result(result_path, dtype=dtype)
 
         metrics_jax = evaluate_excitation_result(
             system_name=metadata["system_name"],
@@ -309,6 +313,7 @@ def update_excitation_df(
             consider_action_distribution=metadata["params"]["alg_params"]["consider_action_distribution"],
             excitation_objective=metadata["excitation_objective"],
             use_f64=metadata.get("use_f64"),
+            eval_dtype=None if dtype is None else np.dtype(dtype).name,
         )
         if row.keys() & metrics.keys():
             raise ValueError("Metric names overlap with metadata columns.")

@@ -9,6 +9,7 @@ from uuid import uuid4
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
 import jax
+import jax.numpy as jnp
 
 from admpe.data_management import (
     MODELING_EXPERIMENTS_ROOT,
@@ -225,7 +226,7 @@ def run_modeling_experiment(
             )
 
             try:
-                train_data = load_excitation_result(dataset_path)
+                train_data = load_excitation_result(dataset_path, dtype=jnp.float64 if use_f64 else jnp.float32)
 
                 log.info(
                     "Loaded excitation dataset: system=%s; objective=%s; "
