@@ -22,10 +22,24 @@ def resolve_load_dtype(dtype):
     return dtype
 
 
-def _cast_floating_array(array, dtype):
+def _prepare_jax_array(array, dtype):
     array = np.asarray(array)
-    if dtype is not None and np.issubdtype(array.dtype, np.floating):
-        array = array.astype(dtype, copy=False)
+
+    if dtype is None:
+        return array
+
+    if np.issubdtype(array.dtype, np.floating):
+        return array.astype(dtype, copy=False)
+
+    if np.issubdtype(array.dtype, np.integer):
+        target = np.dtype(jax.dtypes.canonicalize_dtype(array.dtype))
+
+        if target != array.dtype:
+            limits = np.iinfo(target)
+            if np.any(array < limits.min) or np.any(array > limits.max):
+                raise ValueError(f"Cannot convert {array.dtype} to {target}: " "integer value out of range.")
+            return array.astype(target, copy=False)
+
     return array
 
 
@@ -40,7 +54,7 @@ def _check_jax_dtype_available(dtype):
 
 
 def load_jax_array(array, dtype):
-    array = _cast_floating_array(array, dtype)
+    array = _prepare_jax_array(array, dtype)
     _check_jax_dtype_available(array.dtype)
     return jnp.asarray(array)
 
@@ -61,11 +75,13 @@ def load_eqx_with_dtype(path, template, dtype):
         def align_leaf(leaf):
             if isinstance(leaf, (jax.Array, jax.ShapeDtypeStruct, np.ndarray)):
                 saved = np.load(stream, allow_pickle=False)
-                target = dtype if dtype is not None and np.issubdtype(saved.dtype, np.floating) else saved.dtype
                 if isinstance(leaf, np.ndarray):
                     return np.empty(leaf.shape, dtype=saved.dtype)
-                _check_jax_dtype_available(target)
-                return jax.ShapeDtypeStruct(leaf.shape, target)
+
+                prepared = _prepare_jax_array(saved, dtype)
+
+                _check_jax_dtype_available(prepared.dtype)
+                return jax.ShapeDtypeStruct(leaf.shape, prepared.dtype)
 
             eqx.default_deserialise_filter_spec(stream, leaf)
             return leaf
