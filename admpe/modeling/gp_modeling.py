@@ -1,6 +1,8 @@
 from typing import Callable
 
 import tqdm
+import numpy as np
+import matplotlib.pyplot as plt
 
 import jax
 import jax.numpy as jnp
@@ -8,6 +10,9 @@ import jax.scipy as jsp
 import equinox as eqx
 import gpjax as gpx
 import paramax
+from jax_tqdm import scan_tqdm
+
+from dmpe.utils.density_estimation import build_grid
 
 
 class GPTransitionModel(eqx.Module):
@@ -101,6 +106,17 @@ class GPTransitionModel(eqx.Module):
 
         return next_obs
 
+    def query_uncertainty(self, obs, action):
+        obs = jnp.asarray(obs, dtype=self.alpha.dtype)
+        action = jnp.asarray(action, dtype=self.train_x.dtype)
+        query = jnp.concatenate([self.featurize(obs), action])[None, :]
+
+        total = 0.0
+        for idx, posterior in enumerate(self.posteriors):
+            D = gpx.Dataset(X=self.train_x, y=self.train_y[..., idx : idx + 1])
+            total += jnp.sum(posterior.predict(query, train_data=D, return_covariance_type="diagonal").variance)
+        return total
+
     def __call__(self, init_obs, actions, tau):
         init_obs = jnp.asarray(init_obs, dtype=self.alpha.dtype)
 
@@ -143,7 +159,7 @@ def fit_gp_transitions(
 
     posteriors, alphas, histories = [], [], []
 
-    for index, posterior in tqdm.tqdm(enumerate(model.posteriors)):
+    for index, posterior in tqdm.tqdm(enumerate(model.posteriors), total=len(model.posteriors)):
         dataset = gpx.Dataset(
             X=inputs,
             y=targets[:, index : index + 1],
@@ -188,6 +204,129 @@ def fit_gp_transitions(
     )
 
     return fitted_model, histories
+
+
+def visualize_transition_uncertainty(
+    validation_points_per_dim: int,
+    model: GPTransitionModel,
+    labels: list[str] | None = None,
+    *,
+    batch_size: int = 256,
+):
+    """Plot pairwise means of the summed latent transition variance."""
+    if validation_points_per_dim < 2 or batch_size < 1:
+        raise ValueError("Use at least 2 points per dimension and a positive batch_size.")
+
+    obs_dim = model.y_dim
+    feature_dim = model.featurize(jnp.zeros(obs_dim, dtype=model.train_x.dtype)).shape[-1]
+    action_dim = model.x_dim - feature_dim
+    n_features = obs_dim + action_dim
+
+    if labels is None:
+        labels = [str(i) for i in range(n_features)]
+    if len(labels) != n_features:
+        raise ValueError("Provide one label per observation and action component.")
+
+    points = build_grid(
+        dim=n_features,
+        low=-1.0,
+        high=1.0,
+        points_per_dim=validation_points_per_dim,
+    ).astype(model.train_x.dtype)
+
+    # @eqx.filter_jit
+    # def evaluate(m, points):
+    #     return jax.lax.map(
+    #         lambda point: m.query_uncertainty(point[:obs_dim], point[obs_dim:]),
+    #         points,
+    #         batch_size=batch_size,
+    #     )
+
+    @eqx.filter_jit
+    def evaluate(m, points):
+        n_points = points.shape[0]
+        n_batches = (n_points + batch_size - 1) // batch_size
+
+        # Pad the final batch so every batch has the same shape.
+        padding = n_batches * batch_size - n_points
+        padded = jnp.pad(points, ((0, padding), (0, 0)), mode="edge")
+        batches = padded.reshape(n_batches, batch_size, points.shape[-1])
+
+        @scan_tqdm(n_batches, desc="Uncertainty", unit="batch", print_rate=10)
+        def body(carry, item):
+            _, batch = item
+            values = eqx.filter_vmap(m.query_uncertainty)(
+                batch[:, :obs_dim],
+                batch[:, obs_dim:],
+            )
+            return carry, values
+
+        _, values = jax.lax.scan(
+            body,
+            None,
+            (jnp.arange(n_batches), batches),
+        )
+        return values.reshape(-1)[:n_points]
+
+    uncertainty_map = np.asarray(evaluate(model, points)).reshape((validation_points_per_dim,) * n_features)
+    vmin = float(uncertainty_map.min())
+    vmax = float(uncertainty_map.max())
+
+    fig, axs = plt.subplots(
+        n_features,
+        n_features,
+        figsize=(6, 6),
+        sharex=True,
+        sharey=True,
+        squeeze=False,
+        layout="constrained",
+    )
+
+    image_artist = None
+    for i in range(n_features):
+        for j in range(n_features):
+            ax = axs[j, i]
+            ax.grid(True)
+            ax.set_xlim(-1.1, 1.1)
+            ax.set_ylim(-1.1, 1.1)
+
+            if i == j:
+                continue
+
+            reduction_axes = tuple(k for k in range(n_features) if k not in (i, j))
+            image = uncertainty_map.mean(axis=reduction_axes)
+            if i < j:
+                image = image.T
+
+            image_artist = ax.imshow(
+                image,
+                origin="lower",
+                extent=[-1, 1, -1, 1],
+                vmin=vmin,
+                vmax=vmax,
+            )
+
+        axs[-1, i].set_xlabel(labels[i])
+        axs[i, 0].set_ylabel(labels[i])
+
+    if image_artist is not None:
+        images = [im for ax in axs.flat for im in ax.images]
+
+        vmin = min(float(im.get_array().min()) for im in images)
+        vmax = max(float(im.get_array().max()) for im in images)
+
+        for im in images:
+            im.set_clim(vmin, vmax)
+
+        fig.colorbar(
+            image_artist,
+            ax=axs,
+            label="Summed posterior variance",
+            shrink=0.8,
+        )
+
+    return fig, axs
+    return fig, axs
 
 
 class GPSequenceModel(eqx.Module):
