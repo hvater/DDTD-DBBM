@@ -273,10 +273,10 @@ def load_excitation_result(path: str | Path, *, dtype=None):
 
     with np.load(foldername / "trajectory.npz", allow_pickle=False) as archive:
         trajectory = {
-            name: load_jax_array(archive[name], dtype)
-            for name in ("observations", "actions", "losses", "proposed_actions")
+            name: load_jax_array(archive[name], dtype) for name in ("observations", "actions", "proposed_actions")
         }
-        trajectory["data_losses"] = load_jax_array(archive["data_losses"], dtype) if "data_losses" in archive else None
+        trajectory["losses"] = archive["losses"].tolist()
+        trajectory["data_losses"] = archive["data_losses"].tolist() if "data_losses" in archive else None
 
     # reconstruct objects
     loading_params = deepcopy(params["model_params"])
