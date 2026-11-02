@@ -53,7 +53,7 @@ def excite_and_fit_with_gp(
             proposed_actions=proposed_actions,
             expl_key=expl_key,
         )
-        prediction_losses.append(prediction_loss)
+        prediction_losses.append(float(prediction_loss))
 
         next_obs, next_state, actions, observations = interact_and_observe(
             env=env, k=jnp.array([k]), action=action, state=state, actions=actions, observations=observations

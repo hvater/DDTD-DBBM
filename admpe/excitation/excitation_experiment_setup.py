@@ -40,6 +40,9 @@ SUPPORTED_OBJECTIVES = (
 SUPPORTED_MODELS = ("neural_euler", "perfect")
 
 _SYSTEM_SETUP = {
+    ("fluid_tank", "perfect"): (setup_fluid_tank, None),
+    ("pendulum", "perfect"): (setup_pendulum, None),
+    ("cart_pole", "perfect"): (setup_cart_pole, None),
     ("fluid_tank", "neural_euler"): (setup_fluid_tank, NeuralEulerODE),
     ("pendulum", "neural_euler"): (setup_pendulum, NeuralEulerODEPendulum),
     ("cart_pole", "neural_euler"): (setup_cart_pole, NeuralEulerODECartpole),
