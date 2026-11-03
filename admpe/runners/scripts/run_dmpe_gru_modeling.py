@@ -8,9 +8,9 @@ from admpe.runners.modeling_experiment import run_modeling_experiment
 
 if __name__ == "__main__":
 
-    exp_name = "state_only_testing_a10percent"
+    exp_name = "state_only_pm_no_noise"
 
-    for system_name in ["cart_pole"]:  # ["fluid_tank", "pendulum", "cart_pole"]:
+    for system_name in ["pendulum"]:  # ["fluid_tank", "pendulum", "cart_pole"]:
 
         results = list_excitation_results(
             system_name=system_name,
@@ -23,9 +23,9 @@ if __name__ == "__main__":
             system_name=system_name,
             dataset_paths=dataset_paths,
             model_type="gru",
-            gpu_id=2,
-            exp_name="state_only_pm_a10percent",
-            seeds=np.arange(0, 2, 1).tolist(),
+            gpu_id=1,
+            exp_name="state_only_gru",
+            seeds=np.arange(10, 12, 1).tolist(),
             perform_validation=True,
             validation_every=1000,
             model_overrides={"hidden_size": 64},
