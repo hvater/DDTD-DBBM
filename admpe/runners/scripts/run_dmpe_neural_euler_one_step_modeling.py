@@ -11,7 +11,7 @@ if __name__ == "__main__":
 
     exp_name = "state_only_pm_no_noise"
 
-    for system_name in ["fluid_tank", "pendulum", "cart_pole"]:
+    for system_name in ["cart_pole"]:  # ["fluid_tank", "pendulum", "cart_pole"]:
 
         results = list_excitation_results(
             system_name=system_name,
@@ -23,10 +23,15 @@ if __name__ == "__main__":
         run_modeling_experiment(
             system_name=system_name,
             dataset_paths=dataset_paths,
-            model_type="neural_euler_large_1",
+            model_type="neural_euler",
             gpu_id=0,
             exp_name="state_only_pm_no_noise_one_step",
             seeds=np.arange(0, 5, 1).tolist(),
             perform_validation=True,
+            validation_every=1000,
             selection_metric="one_step_mse",
+            model_trainer_overrides={
+                "n_iters": 10_000,
+                "sequence_length": 2,
+            },
         )
