@@ -92,6 +92,21 @@ def run_experiment_for_seed(
     write_metadata(working_path / "experiment.json", metadata)
 
     started = perf_counter()
+
+    log.info(
+        "Preparing run %s: system=%s; objective=%s; model_type=%s; excitation_seed=%d; "
+        "n_time_steps=%d; device=%s; precision=%s; constrain_to_ses=%s",
+        exp_id,
+        system_name,
+        excitation_objective,
+        model_type,
+        seed,
+        n_time_steps,
+        metadata["device"],
+        "float64" if metadata["use_f64"] else "float32",
+        constrain_to_ses,
+    )
+
     try:
         env, params, proposed_actions, loader_key, expl_key, process_noise_key = setup_experiment(
             system_name,
@@ -113,7 +128,24 @@ def run_experiment_for_seed(
         else:
             excite = excite_with_dmpe
 
-        log.info("Starting experiment %s", exp_id)
+        alg_params = params["alg_params"]
+        target = alg_params.get("target_distribution")
+        log.info(
+            "Starting run %s: preparation_seconds=%.2f; obs_dim=%d; action_dim=%d; "
+            "horizon=%s; opt_steps=%s; starts=%s; points_per_dim=%s; bandwidth=%s; "
+            "consider_actions=%s; target_shape=%s",
+            exp_id,
+            perf_counter() - started,
+            env.obs_dim,
+            env.action_dim,
+            alg_params.get("n_prediction_steps"),
+            alg_params.get("n_opt_steps"),
+            alg_params.get("n_starts"),
+            alg_params.get("points_per_dim"),
+            alg_params.get("bandwidth"),
+            alg_params.get("consider_action_distribution"),
+            None if target is None else target.shape,
+        )
         result = excite(
             env,
             params,
@@ -146,7 +178,14 @@ def run_experiment_for_seed(
             working_path,
         )
         raise
-    log.info("Saved experiment to %s", final_path)
+    log.info(
+        "Completed run %s: elapsed_seconds=%.2f; observations_shape=%s; actions_shape=%s; saved_to=%s",
+        exp_id,
+        metadata["elapsed_seconds"],
+        result[0].shape,
+        result[1].shape,
+        final_path,
+    )
     return final_path
 
 
@@ -204,11 +243,32 @@ def run_excitation_experiment(
     tag = f"-{exp_name}" if exp_name else ""
 
     base_id = f"{system_name}-{excitation_objective}-{model_type}{tag}-{uuid4().hex[:8]}"
+    batch_started = perf_counter()
+    log.info(
+        "Starting excitation experiments: system=%s; objective=%s; model_type=%s; "
+        "excitation_seeds=%s; total_trials=%d; n_time_steps=%d; device=%s; precision=%s; "
+        "constrain_to_ses=%s",
+        system_name,
+        excitation_objective,
+        model_type,
+        seeds_to_run,
+        len(seeds_to_run),
+        n_time_steps,
+        devices[index],
+        "float64" if use_f64 else "float32",
+        constrain_to_ses,
+    )
 
     # start experiment:
     paths = []
     with jax.default_device(devices[index]):
-        for seed in seeds_to_run:
+        for seed_idx, seed in enumerate(seeds_to_run, start=1):
+            log.info(
+                "Excitation trial %d/%d: excitation_seed=%d",
+                seed_idx,
+                len(seeds_to_run),
+                seed,
+            )
             try:
                 paths.append(
                     run_experiment_for_seed(
@@ -229,13 +289,27 @@ def run_excitation_experiment(
                     )
                 )
             except Exception:
-                log.exception("Experiment failed for seed %s", seed)
+                log.exception(
+                    "Excitation failed: system=%s; objective=%s; model_type=%s; excitation_seed=%d",
+                    system_name,
+                    excitation_objective,
+                    model_type,
+                    seed,
+                )
                 if not continue_on_error:
                     raise
             finally:
                 jax.clear_caches()
 
-    log.info("Completed %s of %s trials", len(paths), len(seeds_to_run))
+    log.info(
+        "Completed %d/%d excitation trials in %.2fs: system=%s; objective=%s; model_type=%s",
+        len(paths),
+        len(seeds_to_run),
+        perf_counter() - batch_started,
+        system_name,
+        excitation_objective,
+        model_type,
+    )
     return paths
 
 
