@@ -87,6 +87,8 @@ def construct_target_distribution(
     env,
     excitation_objective,
     penalty_function,
+    system_name: str,
+    constrain_to_ses: bool = False,
 ):
     """Constructs target distribution p^* based of the given parameterization.
 
@@ -220,6 +222,26 @@ def construct_target_distribution(
         # mix lola_target with uniform distribution to ensure general coverage
         target_distribution = (lola_target.p[0] + uniform_distribution) / 2
 
+    if constrain_to_ses:
+        from admpe.sets import SafelyExcitableSet
+
+        safely_excitable_set, _ = SafelyExcitableSet.from_system_name(system_name)
+
+        # regenerates grid for the target distribution as it is not returned
+        joint_grid = build_grid(
+            dim=obs_dim + act_dim,
+            low=-alg_params["grid_extend"],
+            high=alg_params["grid_extend"],
+            points_per_dim=alg_params["points_per_dim"],
+        )
+
+        safe_mask = safely_excitable_set.contains(joint_grid)[:, None]
+        target_distribution = jnp.where(safe_mask, target_distribution, 0.0)
+        mass = target_distribution.sum()
+        if not bool(jnp.isfinite(mass) & (mass > 0)):
+            raise ValueError("Target has no finite positive mass inside the safely excitable set.")
+        target_distribution = target_distribution / mass
+
     if not alg_params["consider_action_distribution"]:
 
         # marginalize actions for the state-only case
@@ -246,6 +268,7 @@ def setup_algorithm_parameterization(
     n_time_steps,
     featurize,
     model_class,
+    constrain_to_ses,
     *,
     alg_overrides=None,
     model_trainer_overrides=None,
@@ -303,6 +326,8 @@ def setup_algorithm_parameterization(
             env,
             excitation_objective,
             penalty_function,
+            system_name=system_name,
+            constrain_to_ses=constrain_to_ses,
         )
 
     elif excitation_objective.startswith("gp_"):
@@ -407,6 +432,7 @@ def setup_experiment(
     seed: int,
     n_time_steps: int,
     noise_variance: float,
+    constrain_to_ses: bool,
     *,
     alg_overrides=None,
     model_trainer_overrides=None,
@@ -435,6 +461,7 @@ def setup_experiment(
         n_time_steps,
         featurize,
         model_class,
+        constrain_to_ses,
         alg_overrides=alg_overrides,
         model_trainer_overrides=model_trainer_overrides,
         model_overrides=model_overrides,
