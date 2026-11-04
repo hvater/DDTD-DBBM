@@ -5,6 +5,7 @@ from copy import deepcopy
 import jax
 import jax.numpy as jnp
 import equinox as eqx
+import diffrax
 
 import exciting_environments as excenvs
 
@@ -25,6 +26,7 @@ from admpe.excitation.gp_excitation.gp_model import GPModel, update_gp_dataset
 from admpe.adaptive_densities import TargetDensity
 from admpe.vector_fields import DynamicsVectorField, CurvatureVectorField, LolaVectorField
 from admpe.excitation.excitation_parameterization import fetch_parameterization
+from admpe.pmsm import PMSMPlanningModel, FastNominalSpeedPMSM
 
 SUPPORTED_SYSTEMS = ("fluid_tank", "pendulum", "cart_pole", "pmsm_nominal")
 SUPPORTED_OBJECTIVES = (
@@ -472,4 +474,17 @@ def setup_experiment(
         model_overrides=model_overrides,
     )
 
-    return env, params, proposed_actions, loader_key, expl_key, process_noise_key
+    planning_model = None
+    params["planning_solver"] = type(env._solver).__name__ if model_type == "perfect" else None
+
+    if model_type == "perfect" and system_name == "pmsm_nominal" and excitation_objective.startswith("dmpe_"):
+        planning_env = FastNominalSpeedPMSM(
+            nominal_rpm=env.nominal_rpm,
+            tau=env.tau,
+            process_noise_variance=0.0,
+            solver=diffrax.Heun(),
+        )
+        planning_model = PMSMPlanningModel(env=planning_env)
+        params["planning_solver"] = type(planning_env._solver).__name__
+
+    return env, params, proposed_actions, loader_key, expl_key, process_noise_key, planning_model

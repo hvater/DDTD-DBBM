@@ -108,7 +108,7 @@ def run_experiment_for_seed(
     )
 
     try:
-        env, params, proposed_actions, loader_key, expl_key, process_noise_key = setup_experiment(
+        env, params, proposed_actions, loader_key, expl_key, process_noise_key, planning_model = setup_experiment(
             system_name,
             excitation_objective,
             model_type,
@@ -155,6 +155,7 @@ def run_experiment_for_seed(
             process_noise_key,
             callback=callback,
             callback_every=callback_every,
+            planning_model=planning_model,
         )
         save_excitation_result(working_path, result)
         metadata["status"] = "completed"

@@ -132,7 +132,12 @@ def excite_with_gp_uncertainty(
     process_noise_key: jax.random.PRNGKey | None = None,
     callback_every: int | None = None,
     callback: Callable | None = None,
+    *,
+    planning_model=None,
 ):
+    if planning_model is not None:
+        raise NotImplementedError()
+
     obs, state = env.reset(rng=process_noise_key, deterministic_state=True)
 
     dim_obs_space = obs.shape[0]

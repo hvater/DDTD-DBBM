@@ -11,6 +11,8 @@ import jax.numpy as jnp
 from exciting_environments import CoreEnvironment
 from exciting_environments.pmsm import PMSM, MotorVariant
 
+from dmpe.models.model_utils import simulate_ahead_with_env
+
 
 class NominalSpeedPMSM(PMSM):
     nominal_rpm: float = eqx.field(static=True)
@@ -247,3 +249,21 @@ class FastNominalSpeedPMSM(NominalSpeedPMSM):
             process_noise_variance=process_noise_variance,
         )
         self._solver = diffrax.Heun() if solver is None else solver
+
+
+class PMSMPlanningModel(eqx.Module):
+    env: FastNominalSpeedPMSM
+
+    def __call__(self, init_obs, actions, tau=None):
+        # The physical sampling time is stored in self.env.tau.
+        del tau
+
+        initial_state = self.env.generate_state_from_observation(init_obs)
+
+        observations, _ = simulate_ahead_with_env(
+            env=self.env,
+            init_obs=init_obs,
+            init_state=initial_state,
+            actions=actions,
+        )
+        return observations
