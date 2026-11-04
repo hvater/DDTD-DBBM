@@ -4,6 +4,7 @@ import equinox as eqx
 import jax.numpy as jnp
 
 import exciting_environments as excenvs
+from admpe.pmsm import NominalSpeedPMSM
 
 
 def convert_lists(x):
@@ -96,7 +97,7 @@ def get_plot_labels(system_name: str) -> dict[str, list[str]]:
 
 
 def get_state_difference_for_env(env):
-    if isinstance(env, excenvs.FluidTank):
+    if isinstance(env, (excenvs.FluidTank, NominalSpeedPMSM)):
         return jnp.subtract
     elif isinstance(env, excenvs.Pendulum):
 

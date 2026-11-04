@@ -179,7 +179,7 @@ class DynamicsVectorField(VectorField):
         use_discrete_dynamics: bool = True,
     ):
 
-        dim = env.physical_state_dim + env.action_dim
+        dim = env.obs_dim + env.action_dim
 
         z = build_grid(dim, low=low, high=high, points_per_dim=points_per_dim)
 
@@ -199,16 +199,16 @@ class DynamicsVectorField(VectorField):
             evaluate = ode
 
         values = eqx.filter_vmap(evaluate, in_axes=(0, 0))(
-            z[:, : env.physical_state_dim],
-            z[:, env.physical_state_dim :],
+            z[:, : env.obs_dim],
+            z[:, env.obs_dim :],
         )
 
-        d_x = env.physical_state_dim
+        d_x = env.obs_dim
         feasible = jax.vmap(lambda q: penalty_function(q[None, :d_x], q[None, d_x:]) == 0)(z)
         # overwrite all infeasible values with zero
         values = jnp.where(feasible[:, None], values, jnp.zeros_like(values))
 
-        physical_labels = [f.name for f in dataclasses.fields(env.PhysicalState)]
+        physical_labels = list(env.obs_description)
         action_labels = [f.name for f in dataclasses.fields(env.Action)]
 
         assert ode is not None or discrete_dynamics is not None
@@ -242,7 +242,7 @@ class CurvatureVectorField(VectorField):
         use_discrete_dynamics: bool = True,
         smooth_domain=None,
     ):
-        d_x = env.physical_state_dim
+        d_x = env.obs_dim
         dim = d_x + env.action_dim
 
         z = build_grid(
@@ -290,9 +290,7 @@ class CurvatureVectorField(VectorField):
 
         values = jnp.where(valid[:, None], values, 0.0)
 
-        labels = [f.name for f in dataclasses.fields(env.PhysicalState)] + [
-            f.name for f in dataclasses.fields(env.Action)
-        ]
+        labels = list(env.obs_description) + [f.name for f in dataclasses.fields(env.Action)]
 
         return cls(
             values=values,
@@ -355,7 +353,7 @@ class LolaVectorField(VectorField):
         penalty_function,
         analytical_jac: bool = True,
     ):
-        d_x = env.physical_state_dim
+        d_x = env.obs_dim
 
         dynamics = lambda q: discrete_dynamics(q[:d_x], q[d_x:])
         feasible = lambda q: penalty_function(q[None, :d_x], q[None, d_x:]) == 0
@@ -399,7 +397,7 @@ class LolaVectorField(VectorField):
         radius: float = 0.05,
     ):
 
-        dim = env.physical_state_dim + env.action_dim
+        dim = env.obs_dim + env.action_dim
 
         z = build_grid(dim, low=low, high=high, points_per_dim=points_per_dim)
 
@@ -430,12 +428,12 @@ class LolaVectorField(VectorField):
 
         values = eqx.filter_vmap(evaluate, in_axes=(0))(z)
 
-        d_x = env.physical_state_dim
+        d_x = env.obs_dim
         feasible = jax.vmap(lambda q: penalty_function(q[None, :d_x], q[None, d_x:]) == 0)(z)
         # overwrite all infeasible values with zero
         values = jnp.where(feasible[:, None], values, jnp.zeros_like(values))
 
-        physical_labels = [f.name for f in dataclasses.fields(env.PhysicalState)]
+        physical_labels = list(env.obs_description)
         action_labels = [f.name for f in dataclasses.fields(env.Action)]
 
         assert ode is not None or discrete_dynamics is not None
@@ -447,7 +445,7 @@ class LolaVectorField(VectorField):
             _ode=ode,
             _discrete_dynamics=discrete_dynamics,
             _labels_z=physical_labels + action_labels,
-            _labels_values=physical_labels,
+            _labels_values=["LOLA residual"],
         )
 
     @classmethod
