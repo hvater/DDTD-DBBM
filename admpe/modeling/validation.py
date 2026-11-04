@@ -84,6 +84,18 @@ def rollout_mse(model, validation_rollout_data, tau, featurize):
         squared_error = (featurize(observations)[:, 1:] - featurize(predictions)[:, 1:]) ** 2
         rollout_mse_values[f"rollout_{signal_key}_mse"] = jnp.mean(squared_error)
 
+        key = f"rollout_{signal_key}_mse"
+        rollout_mse_values[key] = jnp.mean(squared_error)
+
+        for horizon in (29, 100):
+            if horizon > squared_error.shape[1]:
+                raise ValueError(
+                    f"{signal_key}: requested {horizon} prediction steps, "
+                    f"but only {squared_error.shape[1]} are available."
+                )
+
+            rollout_mse_values[f"{key}_h{horizon}"] = jnp.mean(squared_error[:, :horizon])
+
     return rollout_mse_values
 
 
