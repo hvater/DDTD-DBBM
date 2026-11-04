@@ -14,6 +14,7 @@ from dmpe.utils.signals import aprbs
 from dmpe.utils.env_utils.cart_pole_utils import setup_env as setup_cart_pole
 from dmpe.utils.env_utils.fluid_tank_utils import setup_env as setup_fluid_tank
 from dmpe.utils.env_utils.pendulum_utils import setup_env as setup_pendulum
+from admpe.pmsm import setup_env as setup_pmsm
 
 from admpe.modeling.modeling_parameterization import get_base_model_type
 from admpe.modeling.neural_euler import NeuralEulerODE, NeuralEulerODECartpole, NeuralEulerODEPendulum
@@ -25,7 +26,7 @@ from admpe.adaptive_densities import TargetDensity
 from admpe.vector_fields import DynamicsVectorField, CurvatureVectorField, LolaVectorField
 from admpe.excitation.excitation_parameterization import fetch_parameterization
 
-SUPPORTED_SYSTEMS = ("fluid_tank", "pendulum", "cart_pole")
+SUPPORTED_SYSTEMS = ("fluid_tank", "pendulum", "cart_pole", "pmsm_nominal")
 SUPPORTED_OBJECTIVES = (
     "dmpe_uniform",
     "dmpe_static_dynamics",  # mixture of dynamics based and uniform
@@ -40,17 +41,21 @@ SUPPORTED_OBJECTIVES = (
 SUPPORTED_MODELS = ("neural_euler", "perfect")
 
 _SYSTEM_SETUP = {
+    ("pmsm_nominal", "perfect"): (setup_pmsm, None),
+    ("pmsm_nominal", "neural_euler"): (setup_pmsm, NeuralEulerODE),
+    ("pmsm_nominal", "gru"): (setup_pmsm, GRU),
+    ("pmsm_nominal", "gp_transition"): (setup_pmsm, GPTransitionModel),
     ("fluid_tank", "perfect"): (setup_fluid_tank, None),
-    ("pendulum", "perfect"): (setup_pendulum, None),
-    ("cart_pole", "perfect"): (setup_cart_pole, None),
     ("fluid_tank", "neural_euler"): (setup_fluid_tank, NeuralEulerODE),
-    ("pendulum", "neural_euler"): (setup_pendulum, NeuralEulerODEPendulum),
-    ("cart_pole", "neural_euler"): (setup_cart_pole, NeuralEulerODECartpole),
     ("fluid_tank", "gru"): (setup_fluid_tank, GRU),
-    ("pendulum", "gru"): (setup_pendulum, GRUPendulum),
-    ("cart_pole", "gru"): (setup_cart_pole, GRUCartpole),
     ("fluid_tank", "gp_transition"): (setup_fluid_tank, GPTransitionModel),
+    ("pendulum", "perfect"): (setup_pendulum, None),
+    ("pendulum", "neural_euler"): (setup_pendulum, NeuralEulerODEPendulum),
+    ("pendulum", "gru"): (setup_pendulum, GRUPendulum),
     ("pendulum", "gp_transition"): (setup_pendulum, GPTransitionModel),
+    ("cart_pole", "perfect"): (setup_cart_pole, None),
+    ("cart_pole", "neural_euler"): (setup_cart_pole, NeuralEulerODECartpole),
+    ("cart_pole", "gru"): (setup_cart_pole, GRUCartpole),
     ("cart_pole", "gp_transition"): (setup_cart_pole, GPTransitionModel),
 }
 

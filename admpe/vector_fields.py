@@ -156,26 +156,11 @@ def make_normalized_discrete_dynamics(
         state_difference = get_state_difference_for_env(env)
 
     deterministic_env = eqx.tree_at(lambda e: e.process_noise_variance, env, 0.0)
-    template_state = deterministic_env.init_state()
-    normalizations = deterministic_env.env_properties.physical_normalizations
-    names = [f.name for f in dataclasses.fields(deterministic_env.PhysicalState)]
 
-    def discrete_dynamics(norm_state_array, norm_action):
-        physical_state = deterministic_env.PhysicalState(
-            **{name: getattr(normalizations, name).denormalize(norm_state_array[i]) for i, name in enumerate(names)}
-        )
-        state = eqx.tree_at(
-            lambda s: s.physical_state,
-            template_state,
-            physical_state,
-        )
-        _, next_state = deterministic_env.step(state, norm_action)
-
-        next_norm_state_array = jnp.stack(
-            [getattr(normalizations, name).normalize(getattr(next_state.physical_state, name)) for name in names]
-        )
-
-        return state_difference(next_norm_state_array, norm_state_array)
+    def discrete_dynamics(obs, action):
+        state = deterministic_env.generate_state_from_observation(obs)
+        next_obs, _ = deterministic_env.step(state, action)
+        return state_difference(next_obs, obs)
 
     return discrete_dynamics
 

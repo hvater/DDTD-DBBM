@@ -4,6 +4,7 @@ import optax
 from dmpe.utils.env_utils.fluid_tank_utils import setup_env as setup_fluid_tank_env
 from dmpe.utils.env_utils.pendulum_utils import setup_env as setup_pendulum_env
 from dmpe.utils.env_utils.cart_pole_utils import setup_env as setup_cart_pole_env
+from admpe.pmsm import setup_env as setup_pmsm
 
 
 def fetch_parameterization(system_name, model_type, excitation_objective):
@@ -114,6 +115,41 @@ def fetch_parameterization(system_name, model_type, excitation_objective):
             width_size=128,
             featurize=featurize,
             depth=3,
+            key=None,
+        )
+
+    elif system_name == "pmsm_nominal":
+        env, penalty_function, featurize, _ = setup_pmsm()
+
+        alg_params = dict(
+            bandwidth=0.08,
+            n_prediction_steps=5,
+            points_per_dim=21,
+            grid_extend=1.05,
+            excitation_optimizer=optax.adabelief(1e-2),
+            n_opt_steps=100 if model_type == "perfect" else 200,
+            start_optimizing=5,
+            consider_action_distribution=True,
+            penalty_function=penalty_function,
+            target_distribution=None,
+            clip_action=False,
+            n_starts=10,
+            reuse_proposed_actions=True,
+        )
+        model_trainer_params = dict(
+            start_learning=None,
+            training_batch_size=64,
+            n_train_steps=5,
+            sequence_length=None,
+            featurize=featurize,
+            model_lr=1e-4,
+        )
+        model_params = dict(
+            obs_dim=env.obs_dim,
+            action_dim=env.action_dim,
+            width_size=64,
+            depth=3,
+            featurize=featurize,
             key=None,
         )
 
