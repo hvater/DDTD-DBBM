@@ -4,9 +4,8 @@ import jax
 import equinox as eqx
 
 from admpe.modeling.neural_euler import NeuralEulerODE
-from dmpe.models.model_utils import simulate_ahead_with_env
+from dmpe.models.model_utils import simulate_ahead_with_env, MODEL_TAU
 import exciting_environments as excenvs
-
 from admpe.excitation.excitation_experiment_setup import setup_environment
 
 
@@ -24,7 +23,7 @@ class ModelWrapper(abc.ABC):
         self.featurize = featurize
 
     @abc.abstractmethod
-    def step(self, obs: jax.Array, action: jax.Array, tau: float = 1.0):
+    def step(self, obs: jax.Array, action: jax.Array, tau: float):
         """
         Perform a one-step prediction given the current observation, action, and time step.
 
@@ -39,7 +38,7 @@ class ModelWrapper(abc.ABC):
         return
 
     @abc.abstractmethod
-    def rollout(self, init_obs: jax.Array, actions: jax.Array, tau: float = 1.0):
+    def rollout(self, init_obs: jax.Array, actions: jax.Array, tau: float):
         """
         Simulate a trajectory starting from an initial observation and a sequence of actions.
 
@@ -61,12 +60,12 @@ class NodeModelWrapper(ModelWrapper):
     featurize: callable
 
     @eqx.filter_jit
-    def step(self, obs, action, tau):
-        return self.featurize(self.model.step(obs, action, tau))
+    def step(self, obs, action, tau=MODEL_TAU):
+        return self.featurize(self.model.step(obs, action, MODEL_TAU))
 
     @eqx.filter_jit
-    def rollout(self, init_obs, actions, tau):
-        pred = self.model(init_obs, actions, tau)
+    def rollout(self, init_obs, actions, tau=MODEL_TAU):
+        pred = self.model(init_obs, actions, MODEL_TAU)
         return eqx.filter_vmap(self.featurize)(pred)
 
 

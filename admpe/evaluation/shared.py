@@ -6,6 +6,7 @@ from matplotlib.lines import Line2D
 
 import jax.numpy as jnp
 
+from dmpe.models.model_utils import MODEL_TAU
 from dmpe.utils.density_estimation import DensityEstimate
 
 
@@ -38,7 +39,7 @@ def visualize_rollout_on_density(
 
     model = modeling_result["model"]
 
-    predictions = model(observations[0], actions, tau=1.0)
+    predictions = model(observations[0], actions, tau=MODEL_TAU)
 
     reference = np.asarray(observations)
     predicted = np.asarray(predictions)

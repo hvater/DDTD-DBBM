@@ -6,6 +6,8 @@ import pandas as pd
 import equinox as eqx
 import jax.numpy as jnp
 
+from dmpe.models.model_utils import MODEL_TAU
+
 from admpe.data_management import load_validation_sequences
 from admpe.excitation.excitation_experiment_setup import setup_environment
 from admpe.evaluation.modeling_evaluation import (
@@ -76,7 +78,7 @@ def rollout_mse(model, validation_rollout_data, tau, featurize):
         predictions = eqx.filter_vmap(model, in_axes=(0, 0, None))(
             observations[:, 0, :],
             actions,
-            tau,
+            MODEL_TAU,
         )
 
         squared_error = (featurize(observations)[:, 1:] - featurize(predictions)[:, 1:]) ** 2
@@ -93,7 +95,7 @@ def one_step_mse(model, validation_data, tau, featurize):
     # add one dimension for the rollout model interface
     action_sequences = actions[:, None, :]
 
-    pred = eqx.filter_vmap(model, in_axes=(0, 0, None))(observations, action_sequences, tau)
+    pred = eqx.filter_vmap(model, in_axes=(0, 0, None))(observations, action_sequences, MODEL_TAU)
 
     # the pred has two elements: the provided initial observation and the one predicted observation
     assert pred.shape[1] == 2

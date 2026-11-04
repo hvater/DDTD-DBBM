@@ -1,7 +1,16 @@
 import re
 import optax
 
+from dmpe.models.model_utils import MODEL_TAU
+
 from admpe.modeling.gp_modeling import GPSequenceModel, GPTransitionModel
+
+SYSTEM_SPECS = {
+    "fluid_tank": (1, 1, 10, ()),
+    "pendulum": (2, 1, 20, (0,)),
+    "cart_pole": (4, 1, 50, (2,)),
+    "pmsm_nominal": (2, 2, 5, ()),
+}
 
 
 def parse_neural_euler_variant(model_type: str) -> tuple[str, int]:
@@ -34,11 +43,12 @@ def fetch_parameterization(
     featurize,
     proposed_model_class,
 ):
+    obs_dim, action_dim, default_length, angle_indices = SYSTEM_SPECS[system_name]
 
     if model_type.startswith("neural_euler"):
         if model_type == "neural_euler":
             size_identifier = "large"
-            sequence_length = {"fluid_tank": 10, "pendulum": 20, "cart_pole": 50}[system_name]
+            sequence_length = default_length
         else:
             size_identifier, horizon = parse_neural_euler_variant(model_type)
             sequence_length = horizon + 1
@@ -58,8 +68,8 @@ def fetch_parameterization(
                 depth = 3
 
         model_params = dict(
-            obs_dim={"fluid_tank": 1, "pendulum": 2, "cart_pole": 4}[system_name],
-            action_dim=1,
+            obs_dim=obs_dim,
+            action_dim=action_dim,
             width_size=width_size,
             depth=depth,
             featurize=featurize,
@@ -72,15 +82,15 @@ def fetch_parameterization(
             sequence_length=sequence_length,
             featurize=featurize,
             model_optimizer=optax.adabelief(learning_rate=1e-4),
-            tau=1,  # NOTE: physically not true, but likely not a problem
+            tau=MODEL_TAU,  # NOTE: physically not true, but intended: tau is to be removed from the models
             n_iters=4000,
         )
         model_class = proposed_model_class
 
     elif model_type.startswith("gru"):
         model_params = dict(
-            obs_dim={"fluid_tank": 1, "pendulum": 2, "cart_pole": 4}[system_name],
-            action_dim=1,
+            obs_dim=obs_dim,
+            action_dim=action_dim,
             hidden_size=12,
             featurize=featurize,
             key=None,
@@ -89,24 +99,20 @@ def fetch_parameterization(
             start_learning=None,
             training_batch_size=128,
             n_train_steps=25,
-            sequence_length={"fluid_tank": 10, "pendulum": 20, "cart_pole": 50}[system_name],
+            sequence_length=default_length,
             featurize=featurize,
             model_optimizer=optax.adabelief(learning_rate=1e-4),
-            tau=1,  # NOTE: physically not true, but likely not a problem
+            tau=MODEL_TAU,  # NOTE: physically not true, but intended: tau is to be removed from the models
             n_iters=4000,
         )
         model_class = proposed_model_class
 
     elif model_type == "gp_transition":
         model_params = dict(
-            obs_dim={"fluid_tank": 1, "pendulum": 2, "cart_pole": 4}[system_name],
-            action_dim=1,
+            obs_dim=obs_dim,
+            action_dim=action_dim,
             featurize=featurize,
-            angle_indices={
-                "fluid_tank": (),
-                "pendulum": (0,),
-                "cart_pole": (2,),
-            }[system_name],
+            angle_indices=angle_indices,
             lengthscale=0.5,
             variance=1.0,
             obs_stddev=0.0,
