@@ -35,6 +35,7 @@ def aprbs(
     batch_size: int,
     key: jax.random.PRNGKey,
     *,
+    scaling: float = 1.0,
     n_actions: int = 1,
     transition_type: str = "step",
     transition_steps: int = 1,
@@ -91,7 +92,7 @@ def aprbs(
         weight = jnp.clip(weight, 0.0, 1.0)
         return (1.0 - weight) * previous + weight * target
 
-    signals = jax.vmap(one_signal)(keys)
+    signals = jax.vmap(one_signal)(keys) * scaling
     return signals.reshape(batch_size, n_actions, n_steps).transpose(0, 2, 1)
 
 
@@ -106,6 +107,7 @@ def multisine(
     batch_size: int,
     key: jax.random.PRNGKey,
     *,
+    scaling: float = 1.0,
     n_actions: int = 1,
     debug: bool = False,
 ) -> jax.Array:
@@ -131,7 +133,7 @@ def multisine(
 
     actions, sines = jax.vmap(one_signal)(keys)
     sines = sines.reshape(batch_size, n_actions, n_steps, n_sines).transpose(0, 2, 1, 3)
-    actions = actions.reshape(batch_size, n_actions, n_steps).transpose(0, 2, 1)
+    actions = actions.reshape(batch_size, n_actions, n_steps).transpose(0, 2, 1) * scaling
 
     if debug:
         return actions, sines
