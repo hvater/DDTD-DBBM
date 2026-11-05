@@ -123,7 +123,7 @@ def fetch_parameterization(system_name, model_type, excitation_objective):
 
         alg_params = dict(
             bandwidth=0.08,
-            n_prediction_steps=5,
+            n_prediction_steps=15,
             points_per_dim=21,
             grid_extend=1.05,
             excitation_optimizer=optax.adabelief(1e-2),
