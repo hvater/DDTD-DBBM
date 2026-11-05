@@ -67,7 +67,11 @@ def get_validation_data(
     return validation_data
 
 
-def rollout_mse(model, validation_rollout_data, tau, featurize):
+def rollout_mse(model, validation_rollout_data, tau, featurize, *, training_horizon=None):
+
+    if training_horizon is not None and training_horizon < 1:
+        raise ValueError("The training horizon must be positive.")
+
     rollout_mse_values = {}
 
     for signal_key, signal_validation_data in validation_rollout_data.items():
@@ -87,7 +91,7 @@ def rollout_mse(model, validation_rollout_data, tau, featurize):
         key = f"rollout_{signal_key}_mse"
         rollout_mse_values[key] = jnp.mean(squared_error)
 
-        for horizon in (29, 100):
+        for horizon in sorted({9, 29, 100, 249, training_horizon} - {None}):
             if horizon > squared_error.shape[1]:
                 raise ValueError(
                     f"{signal_key}: requested {horizon} prediction steps, "
@@ -95,6 +99,13 @@ def rollout_mse(model, validation_rollout_data, tau, featurize):
                 )
 
             rollout_mse_values[f"{key}_h{horizon}"] = jnp.mean(squared_error[:, :horizon])
+
+    if training_horizon is not None:
+        rollout_mse_values["rollout_training_horizon_mse"] = jnp.mean(
+            jnp.asarray(
+                [rollout_mse_values[f"rollout_{signal}_mse_h{training_horizon}"] for signal in validation_rollout_data]
+            )
+        )
 
     return rollout_mse_values
 
@@ -117,7 +128,7 @@ def one_step_mse(model, validation_data, tau, featurize):
     return jnp.mean(error**2)
 
 
-def validate(model, validation_data, tau, featurize):
+def validate(model, validation_data, tau, featurize, *, training_horizon=None):
 
     return {
         "one_step_mse": one_step_mse(
@@ -131,6 +142,7 @@ def validate(model, validation_data, tau, featurize):
             validation_data["rollout"],
             tau,
             featurize,
+            training_horizon=training_horizon,
         ),
     }
 

@@ -143,6 +143,7 @@ def fit_nn(
                     validation_data,
                     model_trainer.tau,
                     model_trainer.featurize,
+                    training_horizon=model_trainer.sequence_length - 1,
                 ).items()
             }
             history_entry.update(metrics)

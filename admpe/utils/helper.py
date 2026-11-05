@@ -64,6 +64,16 @@ def get_plot_labels(system_name: str) -> dict[str, list[str]]:
             (r"Water level $\tilde{h}$",),
             (r"Inflow $\tilde{q}_{\mathrm{in}}$",),
         ),
+        "pmsm_nominal": (
+            (
+                r"$\tilde{i}_\mathrm{d}$",
+                r"$\tilde{i}_\mathrm{q}$",
+            ),
+            (
+                r"$\tilde{v}_\mathrm{d}$",
+                r"$\tilde{v}_\mathrm{q}$",
+            ),
+        ),
     }
 
     if system_name not in definitions:
