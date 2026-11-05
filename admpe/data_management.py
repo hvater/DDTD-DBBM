@@ -61,6 +61,7 @@ class Systems(Enum):
     FLUID_TANK = 1
     PENDULUM = 2
     CART_POLE = 3
+    PMSM_NOMINAL = 4
 
 
 def _json_value(value):

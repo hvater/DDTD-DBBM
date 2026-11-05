@@ -182,6 +182,25 @@ class NominalSpeedPMSM(PMSM):
     def obs_description(self):
         return ["i_d", "i_q"]
 
+    def holding_action(self, state):
+        s = state.physical_state
+        p = self.env_properties.static_params
+        a = self.env_properties.action_normalizations
+
+        psi_d, psi_q = self._interpolate_saturation(s.i_d, s.i_q)[4:]
+
+        # Physical voltages that hold the initial currents.
+        u_d = p.r_s * s.i_d - s.omega_el * psi_q
+        u_q = p.r_s * s.i_q + s.omega_el * psi_d
+
+        # The trajectory generator uses normalized actions.
+        return jnp.stack(
+            (
+                a.u_d.normalize(u_d),
+                a.u_q.normalize(u_q),
+            )
+        )
+
 
 def featurize_currents(x):
     return x

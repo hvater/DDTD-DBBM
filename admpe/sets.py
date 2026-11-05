@@ -280,7 +280,7 @@ class SafelyExcitableSet(CartesianGridSet):
             "fluid_tank": "fluid_tank_S_xu_666a769d-8c1b-4b.npz",
             "pendulum": "pendulum_S_xu_02430b86-ae0d-42.npz",
             "cart_pole": "cart_pole_S_xu_8744b5d5-30e6-4b.npz",
-            "pmsm": "pmsm_S_xu_91f90457-e66e-48.npz",
+            "pmsm_nominal": "pmsm_S_xu_91f90457-e66e-48.npz",
         }
         filename = filenames[system_name]
 

@@ -8,8 +8,8 @@ import jax.numpy as jnp
 
 from dmpe.models.model_utils import simulate_ahead_with_env
 
+from admpe.pmsm import NominalSpeedPMSM
 from admpe.utils.signals import aprbs, multisine
-
 from admpe.sets import sample_from_set
 
 
@@ -24,11 +24,21 @@ def multisine_actions(key, n_steps, n_actions, **kwargs):
 SIGNALS = {
     "aprbs": (
         aprbs_actions,
-        {"t_min": 10, "t_max": 100, "transition_type": "step", "transition_steps": 1},
+        {
+            "t_min": 10,
+            "t_max": 100,
+            "transition_type": "step",
+            "transition_steps": 1,
+            "scaling": 1.0,
+        },
     ),
     "multisine": (
         multisine_actions,
-        {"n_sines": 8, "fundamental_frequency": 0.005},
+        {
+            "n_sines": 8,
+            "fundamental_frequency": 0.005,
+            "scaling": 1.0,
+        },
     ),
 }
 
@@ -65,6 +75,11 @@ def get_candidate_batch_function(env, params, penalty_function, data_key, safe_s
                 initial_observation,
                 key=noise_key,
             )
+
+        if isinstance(env, NominalSpeedPMSM):
+            # specific bias for pmsm, otherwise the signals will always destabilize the system
+            actions = env.holding_action(initial_state)[None, :] + actions
+
         observations, _ = simulate_ahead_with_env(env, initial_observation, initial_state, actions)
 
         trajectory_penalties = penalty_function(x=observations, u=actions)

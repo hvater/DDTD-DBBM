@@ -11,8 +11,12 @@ import jax_tqdm
 import exciting_environments as excenvs
 from dmpe.models.model_utils import simulate_ahead_with_env
 
+from admpe.pmsm import (
+    NominalSpeedPMSM,
+    FastNominalSpeedPMSM,
+    PMSMPlanningModel,
+)
 from admpe.sets import sample_from_set
-
 
 SUPPORTED_SIGNALS = ["ocp"]
 
@@ -45,9 +49,14 @@ def loss_function(
     featurize: Callable,
     env: excenvs.CoreEnvironment,
     n_eval_steps: int,
+    *,
+    planning_model=None,
 ):
-    init_state = env.generate_state_from_observation(init_obs)
-    observations, _ = simulate_ahead_with_env(env, init_obs, init_state, actions)
+    if planning_model is None:
+        init_state = env.generate_state_from_observation(init_obs)
+        observations, _ = simulate_ahead_with_env(env, init_obs, init_state, actions)
+    else:
+        observations = planning_model(init_obs, actions)
 
     # only evaluate the first n_eval_steps observations for the loss
     # the rest is only considered for the penalties
@@ -138,6 +147,18 @@ def get_candidate_batch_function(
 
     prefix_loss = partial(loss_function, n_eval_steps=n_eval_steps)
 
+    if isinstance(env, NominalSpeedPMSM):
+        planning_env = FastNominalSpeedPMSM(
+            nominal_rpm=env.nominal_rpm,
+            tau=env.tau,
+            process_noise_variance=0.0,
+        )
+        planning_model = PMSMPlanningModel(env=planning_env)
+        prefix_loss = partial(
+            prefix_loss,
+            planning_model=planning_model,
+        )
+
     n_starts = params["signal_params"]["n_starts"]
     n_opt_steps = params["signal_params"]["n_opt_steps"]
 
@@ -204,6 +225,10 @@ def get_candidate_batch_function(
 
         valid = finite & (state_excess <= state_tolerance) & (action_excess <= action_tolerance)
         valid = valid & initial_sample_ok & target_sample_ok
+
+        if isinstance(env, NominalSpeedPMSM):
+            physical_penalty = penalty_function(observations, chosen_actions)
+            valid = valid & jnp.all(jnp.isfinite(physical_penalty)) & jnp.all(physical_penalty <= 0.0)
 
         # only return the steps that were optimized for hitting the target
         # the remaining optimized values are only needed for constraint adherence
