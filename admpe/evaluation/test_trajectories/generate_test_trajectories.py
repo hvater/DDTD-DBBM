@@ -23,11 +23,13 @@ import optax
 from admpe.evaluation.test_trajectories import (
     simple_test_trajectories as simple,
     ocp_test_trajectories as ocp,
+    pi_test_trajectories as pi,
 )
 
 SUPPORTED_SIGNALS = (
     *simple.SUPPORTED_SIGNALS,
     *ocp.SUPPORTED_SIGNALS,
+    *pi.SUPPORTED_SIGNALS,
 )
 
 
@@ -95,7 +97,15 @@ def setup_experiment(
 
         if env.process_noise_variance != 0.0:
             raise ValueError("The current OCP loss requires a noiseless environment.")
+    elif signal_name in pi.SUPPORTED_SIGNALS:
+        signal_params = dict(pi.PI_DEFAULTS)
+        overrides = signal_overrides or {}
 
+        unknown = set(overrides) - set(signal_params)
+        if unknown:
+            raise ValueError(f"Unknown PI parameters: {sorted(unknown)}")
+
+        signal_params.update(overrides)
     else:
         signal_params = dict(simple.SIGNALS[signal_name][1])
         signal_params.update(signal_overrides or {})
@@ -137,9 +147,27 @@ def get_candidate_batch_function(
     featurize,
     data_key,
     safe_state_set,
+    *,
+    safely_excitable_set=None,
 ):
-    if params["signal_name"] in simple.SUPPORTED_SIGNALS:
-        generate = simple.get_candidate_batch_function(env, params, penalty_function, data_key, safe_state_set)
+    if params["signal_name"] in pi.SUPPORTED_SIGNALS:
+        return pi.get_candidate_batch_function(
+            env,
+            params,
+            penalty_function,
+            data_key,
+            safe_state_set,
+            safely_excitable_set,
+        )
+
+    elif params["signal_name"] in simple.SUPPORTED_SIGNALS:
+        generate = simple.get_candidate_batch_function(
+            env,
+            params,
+            penalty_function,
+            data_key,
+            safe_state_set,
+        )
 
         def batch(candidate_ids):
             observations, actions, penalties, valid = generate(candidate_ids)
@@ -315,6 +343,7 @@ def generate_testing_dataset(
             featurize,
             data_key,
             safe_state_set,
+            safely_excitable_set=safely_excitable_set,
         )
 
         log.info("Starting dataset %s", exp_id)

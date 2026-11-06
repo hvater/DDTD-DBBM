@@ -18,7 +18,7 @@ from admpe.pmsm import (
 )
 from admpe.sets import sample_from_set
 
-SUPPORTED_SIGNALS = ["ocp"]
+SUPPORTED_SIGNALS = ("ocp",)
 
 OCP_DEFAULTS = dict(
     n_starts=4,
