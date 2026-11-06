@@ -16,6 +16,7 @@ from admpe.data_management import (
     load_modeling_result,
     load_testing_sequences,
     TESTING_TRAJECTORIES_ROOT,
+    EXCITATION_EXPERIMENTS_ROOT,
 )
 
 from admpe.evaluation.modeling_metrics import (
@@ -29,18 +30,23 @@ from admpe.modeling.baselines import PersistenceModel
 from admpe.evaluation.model_wrapping import NodeModelWrapper
 
 
+def resolve_dataset_path(saved_path: str | pathlib.Path) -> pathlib.Path:
+    raw = str(saved_path).removeprefix("PosixPath('").removesuffix("')")
+    original = pathlib.Path(raw)
+    adapted = EXCITATION_EXPERIMENTS_ROOT / original.name
+
+    for candidate in (original, adapted):
+        if (candidate / "experiment.json").is_file():
+            return candidate
+
+    raise FileNotFoundError(f"Excitation dataset not found. Tried:\n" f"  {original}\n" f"  {adapted}")
+
+
 def load_corresponding_excitation_result(modeling_result, *, dtype=None):
     """TODO: Move to a modeling result dataclass? Also visualizations could go in there"""
 
-    try:
-        excitation_result = load_excitation_result(
-            pathlib.Path(modeling_result["metadata"]["dataset_path"]), dtype=dtype
-        )
-    except FileNotFoundError:
-        path = pathlib.Path(modeling_result["metadata"]["dataset_path"].removeprefix("PosixPath('").removesuffix("')"))
-        excitation_result = load_excitation_result(pathlib.Path(path), dtype=dtype)
-
-    return excitation_result
+    path = resolve_dataset_path(modeling_result["metadata"]["dataset_path"])
+    return load_excitation_result(path, dtype=dtype)
 
 
 def generate_default_prediction_validation_points(dim, validation_points_per_dim):
@@ -228,7 +234,7 @@ def update_modeling_df(
 
     def get_excitation_objective(dataset_path):
         # Older metadata stores paths as repr(PosixPath(...)).
-        dataset_path = pathlib.Path(str(dataset_path).removeprefix("PosixPath('").removesuffix("')"))
+        dataset_path = resolve_dataset_path(dataset_path)
         if dataset_path not in excitation_objectives:
             excitation_metadata = json.loads((dataset_path / "experiment.json").read_text())
             excitation_objectives[dataset_path] = excitation_metadata["excitation_objective"]
