@@ -11,7 +11,7 @@ from admpe.pmsm import NominalSpeedPMSM
 SUPPORTED_SIGNALS = ("pi",)
 
 PI_DEFAULTS = dict(
-    n_targets=4,
+    n_targets=20,
     a=4.0,
     integral_scale=0.3,
     anti_windup_time=1e-3,
@@ -155,8 +155,8 @@ def get_candidate_batch_function(
     if cfg["target_steps_min"] > cfg["target_steps_max"]:
         raise ValueError("target_steps_min must not exceed target_steps_max.")
 
-    if cfg["n_targets"] * cfg["target_steps_max"] > params["n_steps"]:
-        raise ValueError("Increase n_time_steps or reduce n_targets or target_steps_max.")
+    if cfg["n_targets"] * cfg["target_steps_min"] < params["n_steps"]:
+        raise ValueError("Increase n_targets or target_steps_min to cover the full rollout horizon.")
 
     if cfg["anti_windup_time"] < env.tau:
         raise ValueError("anti_windup_time must be at least env.tau.")
@@ -272,7 +272,7 @@ def get_candidate_batch_function(
         def step(carry, _):
             state, integral, index, elapsed = carry
 
-            # Continue applying the last reference after the schedule ends.
+            # The pre-sampled schedule covers the full rollout horizon.
             active_index = jnp.minimum(index, n_targets - 1)
             target = target_currents[active_index]
 
@@ -308,14 +308,18 @@ def get_candidate_batch_function(
         )
         penalty = jnp.max(penalty_function(x=observations, u=actions))
 
+        # Record the truncated final hold and zero durations for unused targets.
+        actual_target_steps = jnp.bincount(target_indices, length=n_targets)
+        used_targets = actual_target_steps > 0
+
         finite = (
             jnp.all(jnp.isfinite(observations))
             & jnp.all(jnp.isfinite(actions))
-            & jnp.all(jnp.isfinite(targets))
+            & jnp.all(jnp.isfinite(targets) | ~used_targets[:, None])
             & jnp.all(jnp.isfinite(final[1]))
             & jnp.isfinite(penalty)
         )
-        valid = initial_ok & jnp.all(targets_ok) & finite & (penalty <= 0.0)
+        valid = initial_ok & jnp.all(targets_ok | ~used_targets) & finite & (penalty <= 0.0)
 
         return {
             "observations": observations,
@@ -323,7 +327,8 @@ def get_candidate_batch_function(
             "max_penalty": penalty,
             "target_observations": targets,
             "target_indices": target_indices,
-            "target_steps": target_steps,
+            "target_steps": actual_target_steps,
+            "used_targets": used_targets,
         }, valid
 
     return jax.jit(jax.vmap(generate_candidate))
