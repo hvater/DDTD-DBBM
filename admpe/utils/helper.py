@@ -1,3 +1,7 @@
+import json
+from pathlib import Path
+from collections import defaultdict
+
 import numpy as np
 import jax
 import equinox as eqx
@@ -126,3 +130,40 @@ def get_state_difference_for_env(env):
         return norm_cart_pole_difference
     else:
         raise NotADirectoryError("No state difference defined for env with type:", type(env))
+
+
+def missing_batches(system_name, model_type, exp_name, seeds):
+
+    from admpe.data_management import list_excitation_results, list_modeling_results
+
+    completed = set()
+
+    for result in list_modeling_results(
+        system_name=system_name,
+        model_type=model_type,
+        exp_name=exp_name,
+        status="completed",
+    ):
+        path = Path(result["path"])
+        if not (path / "model.eqx").is_file():
+            continue
+
+        metadata = json.loads((path / "experiment.json").read_text())
+        saved = str(metadata["dataset_path"])
+        saved = saved.removeprefix("PosixPath('").removesuffix("')")
+        completed.add((Path(saved).name, int(metadata["seed"])))
+
+    groups = defaultdict(list)
+
+    for result in list_excitation_results(
+        system_name=system_name,
+        model_type="perfect",
+        exp_name="submission_nov",
+        status="completed",
+    ):
+        path = Path(result["path"])
+        missing = tuple(seed for seed in seeds if (path.name, seed) not in completed)
+        if missing:
+            groups[missing].append(path)
+
+    return groups
