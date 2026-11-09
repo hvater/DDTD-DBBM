@@ -46,39 +46,73 @@ def pprint_helper(x):
     )
 
 
-def get_plot_labels(system_name: str) -> dict[str, list[str]]:
-    definitions = {
-        "cart_pole": (
-            (
-                r"Cart position $\tilde{x}$",
-                r"Cart velocity $\tilde{v}$",
-                r"Pole angle $\tilde{\theta}$",
-                r"Angular velocity $\tilde{\omega}$",
+def get_plot_labels(system_name: str, long: bool = True) -> dict[str, list[str]]:
+    if long:
+        definitions = {
+            "cart_pole": (
+                (
+                    r"Cart position $\tilde{x}$",
+                    r"Cart velocity $\tilde{v}$",
+                    r"Pole angle $\tilde{\theta}$",
+                    r"Angular velocity $\tilde{\omega}$",
+                ),
+                (r"Force $\tilde{F}$",),
             ),
-            (r"Force $\tilde{F}$",),
-        ),
-        "pendulum": (
-            (
-                r"Angle $\tilde{\theta}$",
-                r"Angular velocity $\tilde{\omega}$",
+            "pendulum": (
+                (
+                    r"Angle $\tilde{\theta}$",
+                    r"Angular velocity $\tilde{\omega}$",
+                ),
+                (r"Torque $\tilde{T}$",),
             ),
-            (r"Torque $\tilde{T}$",),
-        ),
-        "fluid_tank": (
-            (r"Water level $\tilde{h}$",),
-            (r"Inflow $\tilde{q}_{\mathrm{in}}$",),
-        ),
-        "pmsm_nominal": (
-            (
-                r"$\tilde{i}_\mathrm{d}$",
-                r"$\tilde{i}_\mathrm{q}$",
+            "fluid_tank": (
+                (r"Water level $\tilde{h}$",),
+                (r"Inflow $\tilde{q}_{\mathrm{in}}$",),
             ),
-            (
-                r"$\tilde{v}_\mathrm{d}$",
-                r"$\tilde{v}_\mathrm{q}$",
+            "pmsm_nominal": (
+                (
+                    r"D-stator current $\tilde{i}_\mathrm{d}$",
+                    r"Q-stator current $\tilde{i}_\mathrm{q}$",
+                ),
+                (
+                    r"D-stator voltage $\tilde{v}_\mathrm{d}$",
+                    r"Q-stator voltage $\tilde{v}_\mathrm{q}$",
+                ),
             ),
-        ),
-    }
+        }
+    else:
+        definitions = {
+            "cart_pole": (
+                (
+                    r"$\tilde{x}$",
+                    r"$\tilde{v}$",
+                    r"$\tilde{\theta}$",
+                    r"$\tilde{\omega}$",
+                ),
+                (r"$\tilde{F}$",),
+            ),
+            "pendulum": (
+                (
+                    r"$\tilde{\theta}$",
+                    r"$\tilde{\omega}$",
+                ),
+                (r"$\tilde{T}$",),
+            ),
+            "fluid_tank": (
+                (r"$\tilde{h}$",),
+                (r"$\tilde{q}_{\mathrm{in}}$",),
+            ),
+            "pmsm_nominal": (
+                (
+                    r"$\tilde{i}_\mathrm{d}$",
+                    r"$\tilde{i}_\mathrm{q}$",
+                ),
+                (
+                    r"$\tilde{v}_\mathrm{d}$",
+                    r"$\tilde{v}_\mathrm{q}$",
+                ),
+            ),
+        }
 
     if system_name not in definitions:
         raise ValueError(f"Unknown system {system_name!r}. " f"Choose from {tuple(definitions)}.")
