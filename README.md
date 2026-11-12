@@ -4,8 +4,9 @@ This codebase accompanies the work:
 
 and was used in the generation of all presented results and experiments.
 
+The two repositories
 
-It uses
 - https://github.com/ExcitingSystems/DMPE/tree/towards-v0.4
 - https://github.com/ExcitingSystems/exciting-environments/tree/noisy-envs
-as dependencies (These will be properly incorporated in the future).
+  
+are needed as dependencies (These will be properly incorporated in the future).
