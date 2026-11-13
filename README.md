@@ -41,6 +41,13 @@ Any parameterization that is not defined within this script uses the default par
 
 ## Modeling experiments:
 
+The scripts for the generation of 
+
+- validation data: `DDTD-DBBM/admpe/runners/scripts/run_generate_val_trajectories.py`
+- testing data: `DDTD-DBBM/admpe/runners/scripts/run_generate_test_trajectories.py`
+
+Any parameterization that is not defined within this script uses the default parameterization at ``.
+
 The scripts for the downstream modeling:
 
 - GP: `DDTD-DBBM/admpe/runners/scripts/run_dmpe_gp_one_step_modeling.py`
@@ -49,21 +56,18 @@ The scripts for the downstream modeling:
 
 Any parameterization that is not defined within this script uses the default parameterization provided at `DDTD-DBBM/admpe/modeling/modeling_parameterization.py`.
 
-The scripts for the generation of 
-
-- validation data:
-- testing data:
-
 
 ## Reproduction of results:
 
 - first run `DDTD-DBBM/admpe/runners/scripts/run_pm_dmpe_excitation.py` to generate all excitation datasets
 - generate validation and testing data through:
-    -
-    -
+    - `DDTD-DBBM/admpe/runners/scripts/run_generate_val_trajectories.py`
+    - `DDTD-DBBM/admpe/runners/scripts/run_generate_test_trajectories.py`
 - once finished run the modeling scripts:
     - `DDTD-DBBM/admpe/runners/scripts/run_dmpe_gp_one_step_modeling.py`
     - `DDTD-DBBM/admpe/runners/scripts/run_dmpe_euler_node_modeling.py`
-    -`DDTD-DBBM/admpe/runners/scripts/run_dmpe_gru_modeling.py`
+    - `DDTD-DBBM/admpe/runners/scripts/run_dmpe_gru_modeling.py`
 
-Ensure that the `exp_name` used for the excitation datasets matches the loading `exp_name` in the modeling scripts
+Ensure that the `exp_name` used for the excitation datasets matches the loading `exp_name` in the modeling scripts.
+
+The safely excitable sets are provided as part of the repository. Their reconstruction can be performed based on the [DMPE](https://github.com/ExcitingSystems/DMPE/tree/towards-v0.4).
