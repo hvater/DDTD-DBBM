@@ -71,3 +71,17 @@ Any parameterization that is not defined within this script uses the default par
 Ensure that the `exp_name` used for the excitation datasets matches the loading `exp_name` in the modeling scripts.
 
 The safely excitable sets are provided as part of the repository. Their reconstruction could be performed based on the [DMPE](https://github.com/ExcitingSystems/DMPE/tree/towards-v0.4) repository.
+The `.npz` versions are constructed from the `.json` versions in `DDTD-DBBM/notebooks/eval/safely_excitable_set.ipynb`.
+
+
+## Evaluation and visualization notebooks:
+
+- Modeling evaluation:
+    - `DDTD-DBBM/notebooks/eval/eval_modeling.ipynb`
+    - `DDTD-DBBM/notebooks/eval/eval_one_step_models.ipynb`
+- Visualization:
+    - `DDTD-DBBM/notebooks/documentation/exemplary_excitation_result.ipynb`
+    - `DDTD-DBBM/notebooks/documentation/quantitative_excitation_results.ipynb`
+    - `DDTD-DBBM/notebooks/documentation/quantitative_one_step_results.ipynb`
+    - `DDTD-DBBM/notebooks/documentation/quantitative_rollout_results.ipynb`
+    - `DDTD-DBBM/notebooks/documentation/exemplary_fluid_tank_improvement.ipynb`
