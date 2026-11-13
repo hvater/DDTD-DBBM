@@ -7,7 +7,7 @@ The two repositories
 - https://github.com/ExcitingSystems/DMPE/tree/towards-v0.4
 - https://github.com/ExcitingSystems/exciting-environments/tree/noisy-envs
   
-are needed as dependencies using the specified branches (These will be properly incorporated in the future).
+are needed as dependencies using the specified branches (These will be properly incorporated in the future including detailed installation steps).
 
 
 ## System simulations:
@@ -33,47 +33,33 @@ They are implemented as ordinary differential equations and solved using ODE sol
 
 ## Excitation experiments:
 
-The excitation algorithm parameterization for each system is provided in the following:
+The script for reproducing the excitation experiments can be found at 
+`DDTD-DBBM/admpe/runners/scripts/run_pm_dmpe_excitation.py`.
 
-- Fluid tank: 
-    
-- Pendulum:
-    
-- Cart-pole:
-    
-- PMSM:
+Any parameterization that is not defined within this script uses the default parameterization provided at `DDTD-DBBM/admpe/excitation/excitation_parameterization.py`.
 
 
 ## Modeling experiments:
 
-The modeling algorithm parameterization for each system and each model type is provided in the following:
+The scripts for the downstream modeling:
 
-### GP:
+- GP: `DDTD-DBBM/admpe/runners/scripts/run_dmpe_gp_one_step_modeling.py`
+- MLP: 
+- GRU: 
 
-- Fluid tank: 
-    
-- Pendulum:
-    
-- Cart-pole:
-    
-- PMSM:
 
-### MLP:
+The scripts for the generation of 
 
-- Fluid tank: 
-    
-- Pendulum:
-    
-- Cart-pole:
-    
-- PMSM:
+- validation data:
+- testing data:
 
-### GRU:
 
-- Fluid tank: 
-    
-- Pendulum:
-    
-- Cart-pole:
-    
-- PMSM:
+## Reproduction of results:
+
+- first run `DDTD-DBBM/admpe/runners/scripts/run_pm_dmpe_excitation.py` to generate all excitation datasets
+- then run:
+    - 
+    - 
+    -
+
+Ensure that the `exp_name` used for the excitation datasets matches the loading `exp_name` in the modeling scripts
