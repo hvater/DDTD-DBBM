@@ -45,8 +45,9 @@ The scripts for the downstream modeling:
 
 - GP: `DDTD-DBBM/admpe/runners/scripts/run_dmpe_gp_one_step_modeling.py`
 - MLP: `DDTD-DBBM/admpe/runners/scripts/run_dmpe_euler_node_modeling.py`
-- GRU: `DDTD/admpe/runners/scripts/run_dmpe_gru_modeling.py`
+- GRU: `DDTD-DBBM/admpe/runners/scripts/run_dmpe_gru_modeling.py`
 
+Any parameterization that is not defined within this script uses the default parameterization provided at `DDTD-DBBM/admpe/modeling/modeling_parameterization.py`.
 
 The scripts for the generation of 
 
@@ -57,9 +58,12 @@ The scripts for the generation of
 ## Reproduction of results:
 
 - first run `DDTD-DBBM/admpe/runners/scripts/run_pm_dmpe_excitation.py` to generate all excitation datasets
-- then run:
-    - 
-    - 
+- generate validation and testing data through:
     -
+    -
+- once finished run the modeling scripts:
+    - `DDTD-DBBM/admpe/runners/scripts/run_dmpe_gp_one_step_modeling.py`
+    - `DDTD-DBBM/admpe/runners/scripts/run_dmpe_euler_node_modeling.py`
+    -`DDTD-DBBM/admpe/runners/scripts/run_dmpe_gru_modeling.py`
 
 Ensure that the `exp_name` used for the excitation datasets matches the loading `exp_name` in the modeling scripts
