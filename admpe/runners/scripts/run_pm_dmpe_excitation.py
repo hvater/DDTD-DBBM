@@ -16,7 +16,6 @@ if __name__ == "__main__":
             "dmpe_uniform",
             "dmpe_static_dynamics",
             "dmpe_static_curv",
-            "dmpe_static_LOLA_ls",
             "dmpe_static_mixture_dynamics",
             "dmpe_static_mixture_curv",
         ]:
