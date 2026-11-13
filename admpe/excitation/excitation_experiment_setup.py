@@ -62,6 +62,37 @@ _SYSTEM_SETUP = {
 }
 
 
+def _make_pmsm_curvature_dynamics(env, n_substeps=64):
+    """Normalized PMSM change over tau using fixed internal substeps."""
+    if not isinstance(n_substeps, int) or n_substeps < 1:
+        raise ValueError("n_substeps must be a positive integer.")
+    norm = env.env_properties.physical_normalizations
+    anorm = env.env_properties.action_normalizations
+    params = env.env_properties.static_params
+    omega = 2 * jnp.pi * params.p * env.nominal_rpm / 60
+
+    def transition(obs, action):
+        y0 = (norm.i_d.denormalize(obs[0]), norm.i_q.denormalize(obs[1]), jnp.zeros((), dtype=obs.dtype))
+        voltage = jnp.stack((anorm.u_d.denormalize(action[0]), anorm.u_q.denormalize(action[1])))
+        term = diffrax.ODETerm(lambda t, y, args: env.nonlinear_ode(t, y, args, lambda _: voltage))
+        solver = env._solver
+        args = (params, omega)
+        dt = jnp.asarray(env.tau / n_substeps, dtype=obs.dtype)
+        zero = jnp.zeros((), dtype=obs.dtype)
+        solver_state = solver.init(term, zero, dt, y0, args)
+
+        def substep(carry, k):
+            y, solver_state = carry
+            t = k * dt
+            y, _, _, solver_state, _ = solver.step(term, t, t + dt, y, args, solver_state, made_jump=False)
+            return (y, solver_state), None
+
+        (y, _), _ = jax.lax.scan(substep, (y0, solver_state), jnp.arange(n_substeps))
+        return jnp.stack((norm.i_d.normalize(y[0]), norm.i_q.normalize(y[1]))) - obs
+
+    return transition
+
+
 def validate_experiment(system_name, excitation_objective, model_type, n_time_steps):
     for name, value, choices in (
         ("system_name", system_name, SUPPORTED_SYSTEMS),
@@ -120,6 +151,12 @@ def construct_target_distribution(
         obs_dim=obs_dim,
     )
 
+    curvature_dynamics = None
+    if system_name == "pmsm_nominal" and excitation_objective in ("dmpe_static_curv", "dmpe_static_mixture_curv"):
+        # Record the target integration setting in saved experiment parameters.
+        alg_params["target_integration_substeps"] = 64
+        curvature_dynamics = _make_pmsm_curvature_dynamics(env, n_substeps=alg_params["target_integration_substeps"])
+
     if excitation_objective == "dmpe_uniform":
         target_distribution = uniform_distribution
 
@@ -167,6 +204,7 @@ def construct_target_distribution(
             high=alg_params["grid_extend"],
             use_discrete_dynamics=True,
             smooth_domain=(lambda q: (q[0] > -1.0)) if isinstance(env, excenvs.FluidTank) else None,
+            discrete_dynamics_fn=curvature_dynamics,
         )
         target = TargetDensity.from_vector_field(
             vf=vf,
@@ -187,6 +225,7 @@ def construct_target_distribution(
             high=alg_params["grid_extend"],
             use_discrete_dynamics=True,
             smooth_domain=(lambda q: (q[0] > -1.0)) if isinstance(env, excenvs.FluidTank) else None,
+            discrete_dynamics_fn=curvature_dynamics,
         )
         target = TargetDensity.from_vector_field(
             vf=vf,

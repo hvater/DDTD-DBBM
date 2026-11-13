@@ -241,6 +241,7 @@ class CurvatureVectorField(VectorField):
         *,
         use_discrete_dynamics: bool = True,
         smooth_domain=None,
+        discrete_dynamics_fn: Callable | None = None,
     ):
         d_x = env.obs_dim
         dim = d_x + env.action_dim
@@ -254,7 +255,9 @@ class CurvatureVectorField(VectorField):
 
         if use_discrete_dynamics:
             ode = None
-            discrete_dynamics = make_normalized_discrete_dynamics(env)
+            discrete_dynamics = (
+                make_normalized_discrete_dynamics(env) if discrete_dynamics_fn is None else discrete_dynamics_fn
+            )
             dynamics = discrete_dynamics
         else:
             ode = partial(

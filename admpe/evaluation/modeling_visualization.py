@@ -341,9 +341,9 @@ def visualize_model_rollouts(
                 linewidth=1.5,
             )
             ax.grid(alpha=0.3)
-            ax.set_xlabel("Time [s]")
+            ax.set_xlabel(r"$t$ in s")
             if column == 0:
-                ax.set_ylabel("action")
+                ax.set_ylabel(r"$\tilde{F}$")
         else:
             raise NotImplementedError()
 
