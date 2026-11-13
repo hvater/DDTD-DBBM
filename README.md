@@ -46,7 +46,7 @@ The scripts for the generation of
 - validation data: `DDTD-DBBM/admpe/runners/scripts/run_generate_val_trajectories.py`
 - testing data: `DDTD-DBBM/admpe/runners/scripts/run_generate_test_trajectories.py`
 
-Any parameterization that is not defined within this script uses the default parameterization at ``.
+Any parameterization that is not defined within this script uses the default parameterization at `DDTD-DBBM/admpe/evaluation/test_trajectories/simple_test_trajectories.py` for the simple signals, at `DDTD-DBBM/admpe/evaluation/test_trajectories/ocp_test_trajectories.py` for the OCP signals, and at `/home/hvater@uni-paderborn.de/projects/updated_deps/A-DMPE/admpe/evaluation/test_trajectories/pi_test_trajectories.py` for the PI signals.
 
 The scripts for the downstream modeling:
 
@@ -70,4 +70,4 @@ Any parameterization that is not defined within this script uses the default par
 
 Ensure that the `exp_name` used for the excitation datasets matches the loading `exp_name` in the modeling scripts.
 
-The safely excitable sets are provided as part of the repository. Their reconstruction can be performed based on the [DMPE](https://github.com/ExcitingSystems/DMPE/tree/towards-v0.4).
+The safely excitable sets are provided as part of the repository. Their reconstruction could be performed based on the [DMPE](https://github.com/ExcitingSystems/DMPE/tree/towards-v0.4) repository.
