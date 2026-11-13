@@ -44,8 +44,8 @@ Any parameterization that is not defined within this script uses the default par
 The scripts for the downstream modeling:
 
 - GP: `DDTD-DBBM/admpe/runners/scripts/run_dmpe_gp_one_step_modeling.py`
-- MLP: 
-- GRU: 
+- MLP: `DDTD-DBBM/admpe/runners/scripts/run_dmpe_euler_node_modeling.py`
+- GRU: `DDTD/admpe/runners/scripts/run_dmpe_gru_modeling.py`
 
 
 The scripts for the generation of 
